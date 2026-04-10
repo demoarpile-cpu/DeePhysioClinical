@@ -1,0 +1,258 @@
+const prisma = require('../../config/prisma');
+
+const createAppointment = async (data) => {
+  const { patientId, therapistId, appointmentDate, serviceId, room, startTime, endTime, notes } = data;
+
+  // 1. Check patient exists
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId }
+  });
+
+  if (!patient) {
+    const error = new Error('Patient not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 2. Check therapist exists and is a therapist
+  const therapist = await prisma.user.findUnique({
+    where: { id: therapistId }
+  });
+
+  if (!therapist || (therapist.role !== 'therapist' && therapist.role !== 'admin')) {
+    const error = new Error('Therapist not found or user is not a therapist');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 4. Validate date (extra safety)
+  const parsedDate = new Date(appointmentDate);
+  if (isNaN(parsedDate.getTime())) {
+    const error = new Error('Invalid appointment date');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 5. Create appointment
+  const appointment = await prisma.appointment.create({
+    data: {
+      patient_id: patientId,
+      therapist_id: therapistId,
+      appointment_date: parsedDate,
+      service_id: serviceId,
+      room: room,
+      notes: notes,
+      start_time: startTime ? new Date(startTime) : null,
+      end_time: endTime ? new Date(endTime) : null,
+      status: 'scheduled'
+    }
+  });
+
+  return appointment;
+};
+
+const getAllAppointments = async (filters) => {
+  const { date, therapistId, patientId } = filters;
+
+  const where = {};
+
+  if (date) {
+    const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(date);
+    endDate.setHours(23, 59, 59, 999);
+
+    if (!isNaN(startDate.getTime())) {
+      where.appointment_date = {
+        gte: startDate,
+        lte: endDate
+      };
+    }
+  }
+
+  if (therapistId) {
+    where.therapist_id = parseInt(therapistId, 10);
+  }
+
+  if (patientId) {
+    where.patient_id = parseInt(patientId, 10);
+  }
+
+  // Filter out cancelled appointments and deleted patients
+  where.status = { not: 'cancelled' };
+  where.patient = { is_deleted: false };
+
+  return await prisma.appointment.findMany({
+    where,
+    include: {
+      patient: { select: { id: true, first_name: true, last_name: true } },
+      therapist: { select: { id: true, name: true } },
+      service: { select: { id: true, name: true } }
+    },
+    orderBy: {
+      appointment_date: 'asc'
+    }
+  });
+};
+
+const getAppointmentById = async (id) => {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id },
+    include: {
+      patient: { select: { id: true, first_name: true, last_name: true } },
+      therapist: { select: { id: true, name: true } },
+      service: { select: { id: true, name: true } }
+    }
+  });
+
+  if (!appointment) {
+    const error = new Error('Appointment not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return appointment;
+};
+
+const updateAppointment = async (id, data) => {
+  const appointment = await prisma.appointment.findUnique({ where: { id } });
+  if (!appointment) {
+    const error = new Error('Appointment not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const { appointmentDate, therapistId, serviceId, room, startTime, endTime, notes } = data;
+
+  if (therapistId !== undefined) {
+    const therapist = await prisma.user.findUnique({ where: { id: therapistId } });
+    if (!therapist || therapist.role !== 'therapist') {
+      const error = new Error('Invalid therapist ID');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  if (serviceId !== undefined) {
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) {
+      const error = new Error('Service not found');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  if (startTime && endTime && new Date(startTime) >= new Date(endTime)) {
+    const error = new Error('End time must be after start time');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updateData = {};
+  if (appointmentDate !== undefined) {
+    const parsed = new Date(appointmentDate);
+    if (isNaN(parsed.getTime())) {
+      const error = new Error('Invalid appointment date');
+      error.statusCode = 400;
+      throw error;
+    }
+    updateData.appointment_date = parsed;
+  }
+  if (therapistId !== undefined) updateData.therapist_id = therapistId;
+  if (serviceId !== undefined) updateData.service_id = serviceId;
+  if (room !== undefined) updateData.room = room;
+  if (startTime !== undefined) updateData.start_time = startTime ? new Date(startTime) : null;
+  if (endTime !== undefined) updateData.end_time = endTime ? new Date(endTime) : null;
+  if (notes !== undefined) updateData.notes = notes;
+
+  return await prisma.appointment.update({
+    where: { id },
+    data: updateData,
+    include: {
+      patient: { select: { id: true, first_name: true, last_name: true } },
+      therapist: { select: { id: true, name: true } },
+      service: { select: { id: true, name: true } }
+    }
+  });
+};
+
+const deleteAppointment = async (id) => {
+  const appointment = await prisma.appointment.findUnique({ where: { id } });
+  if (!appointment) {
+    const error = new Error('Appointment not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await prisma.appointment.delete({ where: { id } });
+  return appointment;
+};
+
+const updateAppointmentStatus = async (id, rawStatus) => {
+  const status = rawStatus.toLowerCase();
+  const appointment = await prisma.appointment.findUnique({ where: { id } });
+  if (!appointment) {
+    const error = new Error('Appointment not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const validFlow = {
+    scheduled: ['checked_in', 'cancelled', 'no_show'],
+    confirmed: ['checked_in', 'cancelled', 'no_show'],
+    checked_in: ['completed', 'cancelled'],
+    completed: [],
+    cancelled: [],
+    // Real-world late arrival: no-show can be recovered if patient eventually arrives.
+    no_show: ['checked_in', 'cancelled']
+  };
+
+  const currentStatus = appointment.status;
+  const allowedNext = validFlow[currentStatus] || [];
+  if (!allowedNext.includes(status)) {
+    const error = new Error(`Invalid status transition from ${currentStatus} to ${status}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updateData = { status };
+  if (status === 'checked_in') {
+    updateData.checked_in_at = new Date();
+  }
+
+  return await prisma.appointment.update({
+    where: { id },
+    data: updateData,
+    include: {
+      patient: { select: { id: true, first_name: true, last_name: true } },
+      therapist: { select: { id: true, name: true } },
+      service: { select: { id: true, name: true } }
+    }
+  });
+};
+
+const getPractitionersForScheduling = async () => {
+  return prisma.user.findMany({
+    where: {
+      role: { in: ['therapist', 'admin'] }
+    },
+    select: {
+      id: true,
+      name: true,
+      role: true
+    },
+    orderBy: {
+      name: 'asc'
+    }
+  });
+};
+
+module.exports = {
+  createAppointment,
+  getAllAppointments,
+  getAppointmentById,
+  updateAppointment,
+  deleteAppointment,
+  updateAppointmentStatus,
+  getPractitionersForScheduling
+};

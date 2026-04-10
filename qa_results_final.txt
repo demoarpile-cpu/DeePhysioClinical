@@ -1,0 +1,452 @@
+Starting QA Backend API Tests...
+
+
+--- PATIENTS : CREATE PATIENT (VALID REQUEST) ---
+API:
+POST /api/patients
+
+REQUEST:
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "9998882182"
+}
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "id": 6,
+    "first_name": "John",
+    "last_name": "Doe",
+    "phone": "9998882182",
+    "email": null,
+    "gender": null,
+    "date_of_birth": null,
+    "address": null,
+    "patient_type": "Normal",
+    "behaviour": "green",
+    "status": "Active",
+    "therapist_id": null,
+    "created_at": "2026-03-31T10:39:22.538Z",
+    "updated_at": "2026-03-31T10:39:22.538Z"
+  },
+  "message": "Patient created successfully"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- PATIENTS : DUPLICATE PHONE/EMAIL (INVALID REQUEST) ---
+API:
+POST /api/patients
+
+REQUEST:
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "phone": "9998882182"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "Patient with this phone number already exists"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- PATIENTS : UPDATE PARTIAL FIELDS (EDGE CASE) ---
+API:
+PUT /api/patients/6
+
+REQUEST:
+{
+  "address": "123 New Street"
+}
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "id": 6,
+    "first_name": "John",
+    "last_name": "Doe",
+    "phone": "9998882182",
+    "email": null,
+    "gender": null,
+    "date_of_birth": null,
+    "address": "123 New Street",
+    "patient_type": "Normal",
+    "behaviour": "green",
+    "status": "Active",
+    "therapist_id": null,
+    "created_at": "2026-03-31T10:39:22.538Z",
+    "updated_at": "2026-03-31T10:39:22.576Z"
+  },
+  "message": "Patient updated successfully"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- PATIENTS : DELETE PATIENT (VALID REQUEST) ---
+API:
+DELETE /api/patients/7
+
+REQUEST:
+{}
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "id": 7,
+    "first_name": "Delete",
+    "last_name": "Me",
+    "phone": "9998872182",
+    "email": null,
+    "gender": null,
+    "date_of_birth": null,
+    "address": null,
+    "patient_type": "Normal",
+    "behaviour": "green",
+    "status": "Active",
+    "therapist_id": null,
+    "created_at": "2026-03-31T10:39:22.550Z",
+    "updated_at": "2026-03-31T10:39:22.550Z"
+  },
+  "message": "Patient deleted successfully"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- SERVICES : CREATE SERVICE (VALID REQUEST) ---
+API:
+POST /api/services
+
+REQUEST:
+{
+  "name": "Physio 1774953562182",
+  "duration": 60,
+  "price": 150
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "\nInvalid `prisma.service.findFirst()` invocation in\nD:\\KIAAN\\DeePhysio_clinic_management\\backend\\src\\modules\\service\\service.service.js:35:41\n\n  32 const trimmedName = name.trim();\n  33 \n  34 // Check unique name (case-insensitive)\n→ 35 const existing = await prisma.service.findFirst({\n       where: {\n         name: {\n           equals: \"Physio 1774953562182\",\n           mode: \"insensitive\",\n           ~~~~\n     ?     in?: String[],\n     ?     notIn?: String[],\n     ?     lt?: String | StringFieldRefInput,\n     ?     lte?: String | StringFieldRefInput,\n     ?     gt?: String | StringFieldRefInput,\n     ?     gte?: String | StringFieldRefInput,\n     ?     contains?: String | StringFieldRefInput,\n     ?     startsWith?: String | StringFieldRefInput,\n     ?     endsWith?: String | StringFieldRefInput,\n     ?     not?: String | NestedStringFilter\n         }\n       }\n     })\n\nUnknown argument `mode`. Did you mean `lte`? Available options are marked with ?."
+}
+
+RESULT:
+FAIL
+--------------------------------------
+
+
+--- SERVICES : DUPLICATE NAME (CASE-INSENSITIVE) (INVALID REQUEST) ---
+API:
+POST /api/services
+
+REQUEST:
+{
+  "name": "physio 1774953562182",
+  "duration": 30,
+  "price": 80
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "\nInvalid `prisma.service.findFirst()` invocation in\nD:\\KIAAN\\DeePhysio_clinic_management\\backend\\src\\modules\\service\\service.service.js:35:41\n\n  32 const trimmedName = name.trim();\n  33 \n  34 // Check unique name (case-insensitive)\n→ 35 const existing = await prisma.service.findFirst({\n       where: {\n         name: {\n           equals: \"physio 1774953562182\",\n           mode: \"insensitive\",\n           ~~~~\n     ?     in?: String[],\n     ?     notIn?: String[],\n     ?     lt?: String | StringFieldRefInput,\n     ?     lte?: String | StringFieldRefInput,\n     ?     gt?: String | StringFieldRefInput,\n     ?     gte?: String | StringFieldRefInput,\n     ?     contains?: String | StringFieldRefInput,\n     ?     startsWith?: String | StringFieldRefInput,\n     ?     endsWith?: String | StringFieldRefInput,\n     ?     not?: String | NestedStringFilter\n         }\n       }\n     })\n\nUnknown argument `mode`. Did you mean `lte`? Available options are marked with ?."
+}
+
+RESULT:
+FAIL
+--------------------------------------
+
+
+--- SERVICES : FILTER ACTIVEONLY=TRUE (EDGE CASE) ---
+API:
+GET /api/services?activeOnly=true
+
+REQUEST:
+{}
+
+RESPONSE:
+{
+  "success": true,
+  "data": []
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- APPOINTMENTS : CREATE APPOINTMENT (VALID REQUEST) ---
+API:
+POST /api/appointments
+
+REQUEST:
+{
+  "patientId": 6,
+  "therapistId": 8,
+  "appointmentDate": "2026-04-01T10:39:22.627Z"
+}
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "id": 3,
+    "patient_id": 6,
+    "therapist_id": 8,
+    "appointment_date": "2026-04-01T10:39:22.627Z",
+    "status": "scheduled",
+    "notes": null,
+    "created_at": "2026-03-31T10:39:22.639Z",
+    "updated_at": "2026-03-31T10:39:22.639Z",
+    "checked_in_at": null,
+    "service_id": null,
+    "room": null,
+    "start_time": null,
+    "end_time": null
+  },
+  "message": "Appointment created successfully"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- APPOINTMENTS : INVALID THERAPIST (INVALID REQUEST) ---
+API:
+POST /api/appointments
+
+REQUEST:
+{
+  "patientId": 6,
+  "therapistId": 999999,
+  "appointmentDate": "2026-04-01T10:39:22.645Z"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "Therapist not found or user is not a therapist"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- APPOINTMENTS : UPDATE APPOINTMENT (EDGE CASE) ---
+API:
+PUT /api/appointments/3
+
+REQUEST:
+{
+  "room": "Room 101"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "paramIdValidation is not defined"
+}
+
+RESULT:
+FAIL
+--------------------------------------
+
+
+--- APPOINTMENTS : STATUS TRANSITION (VALID) (VALID REQUEST) ---
+API:
+PATCH /api/appointments/3/status
+
+REQUEST:
+{
+  "status": "confirmed"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "paramIdValidation is not defined"
+}
+
+RESULT:
+FAIL
+--------------------------------------
+
+
+--- APPOINTMENTS : STATUS TRANSITION (INVALID) (INVALID REQUEST) ---
+API:
+PATCH /api/appointments/3/status
+
+REQUEST:
+{
+  "status": "flying"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "paramIdValidation is not defined"
+}
+
+RESULT:
+FAIL
+--------------------------------------
+
+
+--- CLINICAL NOTES : CREATE DRAFT NOTE (VALID REQUEST) ---
+API:
+POST /api/clinical-notes
+
+REQUEST:
+{
+  "patientId": 6,
+  "therapistId": 8,
+  "type": "Initial Evaluation",
+  "date": "2026-03-31T10:39:22.673Z",
+  "status": "Draft",
+  "subjective": "Patient complains of lower back pain."
+}
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "id": "76119b63-a1b2-4e6e-bb37-b06db5cae4c5",
+    "patient_id": 6,
+    "therapist_id": 8,
+    "type": "Initial Evaluation",
+    "date": "2026-03-31T10:39:22.673Z",
+    "status": "Draft",
+    "subjective": "Patient complains of lower back pain.",
+    "objective": null,
+    "assessment": null,
+    "plan": null,
+    "created_at": "2026-03-31T10:39:22.687Z",
+    "updated_at": "2026-03-31T10:39:22.687Z",
+    "patient": {
+      "id": 6,
+      "first_name": "John",
+      "last_name": "Doe"
+    },
+    "therapist": {
+      "id": 8,
+      "name": "Therapist Test 1774953562182"
+    }
+  },
+  "message": "Clinical note created successfully"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- CLINICAL NOTES : CREATE COMPLETED NOTE (INVALID REQUEST) ---
+API:
+POST /api/clinical-notes
+
+REQUEST:
+{
+  "patientId": 6,
+  "therapistId": 8,
+  "type": "Initial Evaluation",
+  "date": "2026-03-31T10:39:22.703Z",
+  "status": "Completed",
+  "subjective": "Only subjective"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "All SOAP fields (subjective, objective, assessment, plan) are required when status is Completed"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- CLINICAL NOTES : UPDATE DRAFT TO COMPLETED (VALID REQUEST) ---
+API:
+PUT /api/clinical-notes/76119b63-a1b2-4e6e-bb37-b06db5cae4c5
+
+REQUEST:
+{
+  "status": "Completed",
+  "objective": "ROM is limited",
+  "assessment": "Muscle strain",
+  "plan": "Physiotherapy 2x week"
+}
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "id": "76119b63-a1b2-4e6e-bb37-b06db5cae4c5",
+    "patient_id": 6,
+    "therapist_id": 8,
+    "type": "Initial Evaluation",
+    "date": "2026-03-31T10:39:22.673Z",
+    "status": "Completed",
+    "subjective": "Patient complains of lower back pain.",
+    "objective": "ROM is limited",
+    "assessment": "Muscle strain",
+    "plan": "Physiotherapy 2x week",
+    "created_at": "2026-03-31T10:39:22.687Z",
+    "updated_at": "2026-03-31T10:39:22.725Z",
+    "patient": {
+      "id": 6,
+      "first_name": "John",
+      "last_name": "Doe"
+    },
+    "therapist": {
+      "id": 8,
+      "name": "Therapist Test 1774953562182"
+    }
+  },
+  "message": "Clinical note updated successfully"
+}
+
+RESULT:
+PASS
+--------------------------------------
+
+
+--- CLINICAL NOTES : INVALID UUID (INVALID REQUEST) ---
+API:
+PUT /api/clinical-notes/not-a-uuid
+
+REQUEST:
+{
+  "status": "Completed"
+}
+
+RESPONSE:
+{
+  "success": false,
+  "message": "Invalid clinical note ID"
+}
+
+RESULT:
+PASS
+--------------------------------------
+

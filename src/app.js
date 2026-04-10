@@ -5,13 +5,23 @@ const { requireModuleAccess } = require('./modules/auth/moduleAccess.middleware'
 const app = express();
 
 // Core Middleware
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://deephysiosoftware.kiaansoftware.com'
+];
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', 'http://deephysiosoftware.kiaansoftware.com',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
-
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '15mb' }));

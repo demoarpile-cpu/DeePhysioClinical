@@ -3,7 +3,7 @@ const prisma = require('../../config/prisma');
 const getOverview = async (user = null) => {
   // We need to fetch data for the last 6 months (monthly) and last 4 weeks (weekly)
   const now = new Date();
-  
+
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(now.getMonth() - 5);
   sixMonthsAgo.setDate(1); // Start of that month
@@ -120,7 +120,7 @@ const getOverview = async (user = null) => {
   const totalCompleted = appointments.filter(a => a.status === 'completed').length;
   const totalNewPatients = patients.length;
   const totalRevenue = invoices.reduce((sum, inv) => sum + parseFloat(inv.total || 0), 0);
-  
+
   return { monthlyData, weeklyData, systemFeed: recentLogs, summary: { totalAppointments, totalNoShows, totalCompleted, totalNewPatients, totalRevenue } };
 };
 
@@ -128,44 +128,44 @@ const getOverview = async (user = null) => {
  * Centrally format a log entry for the UI
  */
 const formatActivityLog = (log, summaryOnly = false) => {
-    const logDate = new Date(log.created_at);
-    const now = new Date();
-    const diffMs = now - logDate;
-    const diffMins = Math.floor(diffMs / 60000);
-    const timeAgo = diffMins < 60 ? `${diffMins}m ago` : diffMins < 1440 ? `${Math.floor(diffMins/60)}h ago` : `${Math.floor(diffMins/1440)}d ago`;
-    
-    const actionMap = {
-      LOGIN: { type: 'Staff Login', format: (d) => d || 'User logged in' },
-      CREATE_APPOINTMENT: { type: 'Booking Created', format: (d) => `New booking: ${d}` },
-      CREATE_PATIENT: { type: 'New Patient', format: (d) => `Added patient: ${d}` },
-      CREATE_NOTE: { type: 'Session Note', format: (d) => `Note created: ${d}` },
-      UPDATE_SETTINGS: { type: 'Settings Updated', format: (d) => d || 'Global settings updated' },
-      CREATE_INVOICE: { type: 'Invoice Created', format: (d) => `New invoice: ${d}` },
-      PAY_INVOICE: { type: 'Payment Received', format: (d) => `Payment: ${d}` }
-    };
+  const logDate = new Date(log.created_at);
+  const now = new Date();
+  const diffMs = now - logDate;
+  const diffMins = Math.floor(diffMs / 60000);
+  const timeAgo = diffMins < 60 ? `${diffMins}m ago` : diffMins < 1440 ? `${Math.floor(diffMins / 60)}h ago` : `${Math.floor(diffMins / 1440)}d ago`;
 
-    const actionInfo = actionMap[log.action] || { type: log.action, format: (d) => d || 'System action' };
+  const actionMap = {
+    LOGIN: { type: 'Staff Login', format: (d) => d || 'User logged in' },
+    CREATE_APPOINTMENT: { type: 'Booking Created', format: (d) => `New booking: ${d}` },
+    CREATE_PATIENT: { type: 'New Patient', format: (d) => `Added patient: ${d}` },
+    CREATE_NOTE: { type: 'Session Note', format: (d) => `Note created: ${d}` },
+    UPDATE_SETTINGS: { type: 'Settings Updated', format: (d) => d || 'Global settings updated' },
+    CREATE_INVOICE: { type: 'Invoice Created', format: (d) => `New invoice: ${d}` },
+    PAY_INVOICE: { type: 'Payment Received', format: (d) => `Payment: ${d}` }
+  };
 
-    const item = {
-      id: log.id,
-      type: actionInfo.type,
-      patient: actionInfo.format(log.details),
-      time: timeAgo,
-      timestamp: log.created_at,
-      staff: log.user?.name || 'System',
-      meta: log.meta
+  const actionInfo = actionMap[log.action] || { type: log.action, format: (d) => d || 'System action' };
+
+  const item = {
+    id: log.id,
+    type: actionInfo.type,
+    patient: actionInfo.format(log.details),
+    time: timeAgo,
+    timestamp: log.created_at,
+    staff: log.user?.name || 'System',
+    meta: log.meta
+  };
+  if (summaryOnly) {
+    return {
+      id: item.id,
+      type: item.type,
+      patient: 'Restricted',
+      time: item.time,
+      timestamp: item.timestamp,
+      staff: item.staff
     };
-    if (summaryOnly) {
-      return {
-        id: item.id,
-        type: item.type,
-        patient: 'Restricted',
-        time: item.time,
-        timestamp: item.timestamp,
-        staff: item.staff
-      };
-    }
-    return item;
+  }
+  return item;
 };
 
 /**
@@ -221,7 +221,7 @@ const fetchActivityLogs = async (user, options = {}) => {
   };
 };
 
-const getStaffOverview = async () => {
+const getStaffOverview = async ({ month, year } = {}) => {
   const staffRows = await prisma.user.findMany({
     where: {
       role: { in: ['admin', 'therapist', 'receptionist', 'billing'] }
@@ -230,16 +230,31 @@ const getStaffOverview = async () => {
       id: true,
       name: true,
       email: true,
-      role: true
+      role: true,
+      created_at: true
     },
     orderBy: { name: 'asc' }
   });
 
+  // Build date filter for appointments (month scope)
+  const apptWhere = {};
+  if (month !== undefined && year !== undefined) {
+    const m = parseInt(month);
+    const y = parseInt(year);
+    const startOfMonth = new Date(y, m, 1);
+    const endOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    apptWhere.appointment_date = { gte: startOfMonth, lte: endOfMonth };
+  }
+
   const appointments = await prisma.appointment.findMany({
+    where: apptWhere,
     select: {
+      id: true,
       therapist_id: true,
       status: true,
-      appointment_date: true
+      appointment_date: true,
+      service: { select: { price: true, name: true } },
+      patient: { select: { first_name: true, last_name: true } }
     }
   });
 
@@ -257,13 +272,23 @@ const getStaffOverview = async () => {
         noShows: 0,
         checkedIn: 0,
         scheduled: 0,
-        todayAppts: 0
+        todayAppts: 0,
+        earnings: 0,
+        appointmentsList: []
       });
     }
 
     const bucket = byTherapist.get(therapistId);
     bucket.total += 1;
-    if (appt.status === 'completed') bucket.completed += 1;
+
+    if (appt.status === 'completed') {
+      bucket.completed += 1;
+      // Only sum service fees for COMPLETED appointments
+      if (appt.service?.price) {
+        bucket.earnings += parseFloat(appt.service.price);
+      }
+    }
+
     if (appt.status === 'no_show') bucket.noShows += 1;
     if (appt.status === 'checked_in') bucket.checkedIn += 1;
     if (appt.status === 'scheduled') bucket.scheduled += 1;
@@ -272,6 +297,16 @@ const getStaffOverview = async () => {
       const apptKey = new Date(appt.appointment_date).toISOString().slice(0, 10);
       if (apptKey === todayKey) bucket.todayAppts += 1;
     }
+
+    // Save appointment details for the "View More" list in UI
+    bucket.appointmentsList.push({
+      id: appt.id,
+      date: appt.appointment_date,
+      status: appt.status,
+      patientName: appt.patient ? `${appt.patient.first_name} ${appt.patient.last_name}`.trim() : 'Unknown Patient',
+      serviceName: appt.service?.name || 'Consultation',
+      price: appt.service?.price ? parseFloat(appt.service.price) : 0
+    });
   });
 
   const staff = staffRows.map((member) => {
@@ -281,7 +316,9 @@ const getStaffOverview = async () => {
       noShows: 0,
       checkedIn: 0,
       scheduled: 0,
-      todayAppts: 0
+      todayAppts: 0,
+      earnings: 0,
+      appointmentsList: []
     };
 
     const completionRate = m.total > 0 ? Math.round((m.completed / m.total) * 100) : 0;
@@ -292,6 +329,7 @@ const getStaffOverview = async () => {
       name: member.name,
       email: member.email,
       role: member.role,
+      joinedDate: member.created_at || null,
       metrics: {
         ...m,
         completionRate
@@ -300,12 +338,16 @@ const getStaffOverview = async () => {
     };
   });
 
+  // Total earnings across all staff
+  const totalEarnings = staff.reduce((sum, s) => sum + (s.metrics?.earnings || 0), 0);
+
   return {
     staff,
     summary: {
       totalStaff: staff.length,
       totalAppointments: appointments.length,
       totalCompleted: appointments.filter((a) => a.status === 'completed').length,
+      totalEarnings,
       roleCounts: staff.reduce((acc, s) => {
         acc[s.role] = (acc[s.role] || 0) + 1;
         return acc;

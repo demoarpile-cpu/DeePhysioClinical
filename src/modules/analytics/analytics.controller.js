@@ -27,7 +27,8 @@ const getActivities = async (req, res, next) => {
 
 const getStaffOverview = async (req, res, next) => {
   try {
-    const data = await analyticsService.getStaffOverview();
+    const { month, year } = req.query;
+    const data = await analyticsService.getStaffOverview({ month, year });
     return res.status(200).json({
       success: true,
       data

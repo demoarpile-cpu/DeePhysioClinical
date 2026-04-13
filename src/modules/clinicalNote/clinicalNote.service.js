@@ -10,11 +10,19 @@ const serializeDynamicForPlan = (dynamicContent) => {
   const responses = dynamicContent.responses && typeof dynamicContent.responses === 'object'
     ? dynamicContent.responses
     : dynamicContent;
+  const fieldLabelMap = {};
+  const layouts = Array.isArray(dynamicContent.layouts) ? dynamicContent.layouts : [];
+  layouts.forEach((layout) => {
+    (layout.fields || []).forEach((field) => {
+      if (field?.id) fieldLabelMap[field.id] = field.label || field.id;
+    });
+  });
   const lines = Object.entries(responses)
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
     .map(([key, value]) => {
       const rendered = Array.isArray(value) ? value.join(', ') : String(value);
-      return `${key}: ${rendered}`;
+      const label = fieldLabelMap[key] || key;
+      return `${label}: ${rendered}`;
     });
   return lines.length ? `\n\nDynamic Template Data:\n${lines.join('\n')}` : '';
 };

@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../../config/prisma');
 const { verifyToken } = require('../auth/auth.middleware');
+const { requireActionAccess } = require('../auth/actionAccess.middleware');
 const { noteTemplateSchema } = require('./noteTemplate.validation');
 
 // GET all active templates
-router.get('/', verifyToken, async (req, res, next) => {
+router.get('/', verifyToken, requireActionAccess('notes.view'), async (req, res, next) => {
   try {
     const templates = await prisma.clinicalNoteTemplate.findMany({
       orderBy: { created_at: 'desc' }
@@ -17,7 +18,7 @@ router.get('/', verifyToken, async (req, res, next) => {
 });
 
 // POST to create a new template
-router.post('/', verifyToken, async (req, res, next) => {
+router.post('/', verifyToken, requireActionAccess('notes.manage'), async (req, res, next) => {
   try {
     const { error, value } = noteTemplateSchema.validate(req.body, { abortEarly: false });
     if (error) {
@@ -45,7 +46,7 @@ router.post('/', verifyToken, async (req, res, next) => {
 });
 
 // PUT to update an existing template
-router.put('/:id', verifyToken, async (req, res, next) => {
+router.put('/:id', verifyToken, requireActionAccess('notes.manage'), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid template ID' });
@@ -80,7 +81,7 @@ router.put('/:id', verifyToken, async (req, res, next) => {
 });
 
 // DELETE a template
-router.delete('/:id', verifyToken, async (req, res, next) => {
+router.delete('/:id', verifyToken, requireActionAccess('notes.manage'), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });

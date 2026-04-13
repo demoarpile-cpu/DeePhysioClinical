@@ -10,7 +10,9 @@ const createClinicalNoteValidation = (data) => {
     subjective: Joi.string().trim().allow(null, '').optional(),
     objective: Joi.string().trim().allow(null, '').optional(),
     assessment: Joi.string().trim().allow(null, '').optional(),
-    plan: Joi.string().trim().allow(null, '').optional()
+    plan: Joi.string().trim().allow(null, '').optional(),
+    dynamic_content: Joi.object().allow(null).optional(),
+    dynamicContent: Joi.object().allow(null).optional()
   }).unknown(false);
 
   return schema.validate(data, { abortEarly: false });
@@ -24,7 +26,9 @@ const updateClinicalNoteValidation = (data) => {
     subjective: Joi.string().trim().allow(null, '').optional(),
     objective: Joi.string().trim().allow(null, '').optional(),
     assessment: Joi.string().trim().allow(null, '').optional(),
-    plan: Joi.string().trim().allow(null, '').optional()
+    plan: Joi.string().trim().allow(null, '').optional(),
+    dynamic_content: Joi.object().allow(null).optional(),
+    dynamicContent: Joi.object().allow(null).optional()
   }).unknown(false);
 
   return schema.validate(data, { abortEarly: false });

@@ -5,6 +5,20 @@ const includeRelations = {
   therapist: { select: { id: true, name: true } }
 };
 
+const serializeDynamicForPlan = (dynamicContent) => {
+  if (!dynamicContent || typeof dynamicContent !== 'object') return '';
+  const responses = dynamicContent.responses && typeof dynamicContent.responses === 'object'
+    ? dynamicContent.responses
+    : dynamicContent;
+  const lines = Object.entries(responses)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(([key, value]) => {
+      const rendered = Array.isArray(value) ? value.join(', ') : String(value);
+      return `${key}: ${rendered}`;
+    });
+  return lines.length ? `\n\nDynamic Template Data:\n${lines.join('\n')}` : '';
+};
+
 const getAllClinicalNotes = async (filters) => {
   const where = {};
 
@@ -78,21 +92,36 @@ const createClinicalNote = async (data) => {
     }
   }
 
-  return await prisma.clinicalNote.create({
-    data: {
-      patient_id: patientId,
-      therapist_id: therapistId,
-      type,
-      date: new Date(date),
-      status: noteStatus,
-      subjective: subjective || null,
-      objective: objective || null,
-      assessment: assessment || null,
-      plan: plan || null,
-      dynamic_content: normalizedDynamicContent || null
-    },
-    include: includeRelations
-  });
+  const baseData = {
+    patient_id: patientId,
+    therapist_id: therapistId,
+    type,
+    date: new Date(date),
+    status: noteStatus,
+    subjective: subjective || null,
+    objective: objective || null,
+    assessment: assessment || null,
+    plan: plan || null
+  };
+
+  try {
+    return await prisma.clinicalNote.create({
+      data: {
+        ...baseData,
+        dynamic_content: normalizedDynamicContent || null
+      },
+      include: includeRelations
+    });
+  } catch (error) {
+    if (!String(error?.message || '').includes('Unknown argument `dynamic_content`')) throw error;
+
+    // Fallback for environments where Prisma client/table isn't updated yet.
+    const fallbackPlan = `${baseData.plan || ''}${serializeDynamicForPlan(normalizedDynamicContent)}`.trim() || null;
+    return await prisma.clinicalNote.create({
+      data: { ...baseData, plan: fallbackPlan },
+      include: includeRelations
+    });
+  }
 };
 
 const updateClinicalNote = async (id, data) => {
@@ -141,11 +170,28 @@ const updateClinicalNote = async (id, data) => {
   if (plan !== undefined) updateData.plan = plan || null;
   if (normalizedDynamicContent !== undefined) updateData.dynamic_content = normalizedDynamicContent || null;
 
-  return await prisma.clinicalNote.update({
-    where: { id },
-    data: updateData,
-    include: includeRelations
-  });
+  try {
+    return await prisma.clinicalNote.update({
+      where: { id },
+      data: updateData,
+      include: includeRelations
+    });
+  } catch (error) {
+    if (!String(error?.message || '').includes('Unknown argument `dynamic_content`')) throw error;
+
+    const fallbackUpdate = { ...updateData };
+    delete fallbackUpdate.dynamic_content;
+    if (normalizedDynamicContent !== undefined) {
+      const currentPlan = fallbackUpdate.plan !== undefined ? fallbackUpdate.plan : note.plan;
+      fallbackUpdate.plan = `${currentPlan || ''}${serializeDynamicForPlan(normalizedDynamicContent)}`.trim() || null;
+    }
+
+    return await prisma.clinicalNote.update({
+      where: { id },
+      data: fallbackUpdate,
+      include: includeRelations
+    });
+  }
 };
 
 const deleteClinicalNote = async (id) => {

@@ -244,6 +244,7 @@ model ClinicalNote {
   objective    String?  @db.Text
   assessment   String?  @db.Text
   plan         String?  @db.Text
+  dynamic_content Json?
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 

@@ -4,7 +4,7 @@ const fieldSchema = Joi.object({
   id: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
   type: Joi.string().valid(
     'short', 'text', 'date', 'select', 'dropdown', 'checkbox',
-    'single_choice', 'signature', 'import', 'heading',
+    'single_choice', 'import', 'heading',
     'helper_text', 'horizontal_line'
   ).required(),
   label: Joi.string().allow('').required(),

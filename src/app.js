@@ -38,8 +38,17 @@ app.use(responseTransformer);
 // Routes
 const authRoutes = require('./modules/auth/auth.routes');
 app.use('/api/auth', authRoutes);
-
-
+// Public Configuration Route
+app.get('/api/public/config', async (req, res, next) => {
+  try {
+    const prisma = require('./config/prisma');
+    const profile = await prisma.globalSettings.findUnique({ where: { key: 'clinicProfile' } });
+    if (!profile) return res.json({ success: true, data: {} });
+    return res.json({ success: true, data: { clinicProfile: profile.value } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const testRoutes = require('./modules/test/test.routes');
 if (process.env.NODE_ENV !== 'production') {

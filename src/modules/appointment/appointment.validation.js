@@ -20,6 +20,7 @@ const updateAppointmentValidation = (data) => {
     appointmentDate: Joi.date().iso().optional(),
     therapistId: Joi.number().integer().optional(),
     serviceId: Joi.number().integer().optional(),
+    status: Joi.string().valid('scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show').optional(),
     room: Joi.string().trim().optional(),
     startTime: Joi.date().iso().optional(),
     endTime: Joi.date().iso().optional(),
@@ -31,7 +32,7 @@ const updateAppointmentValidation = (data) => {
 
 const updateStatusValidation = (data) => {
   const schema = Joi.object({
-    status: Joi.string().valid('scheduled', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show').required()
+    status: Joi.string().valid('scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show').required()
   }).unknown(false);
 
   return schema.validate(data, { abortEarly: false });

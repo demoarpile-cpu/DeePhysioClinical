@@ -11,26 +11,23 @@ const getOverview = async (user = null) => {
   const fourWeeksAgo = new Date();
   fourWeeksAgo.setDate(now.getDate() - 28);
 
-  // Fetch base data
-  const appointments = await prisma.appointment.findMany({
-    where: { appointment_date: { gte: sixMonthsAgo } },
-    select: { appointment_date: true, status: true, id: true }
-  });
-
-  const invoices = await prisma.invoice.findMany({
-    where: { date: { gte: sixMonthsAgo }, status: 'PAID' },
-    select: { date: true, total: true }
-  });
-
-  const patients = await prisma.patient.findMany({
-    where: { created_at: { gte: sixMonthsAgo } },
-    select: { created_at: true }
-  });
-
-  // Fetch recent logs using the new centralized logic (e.g. for Admin/Overview)
-  // For the overview, we assume we want all logs if called without a specific user filter initially
-  // OR we can pass a system-wide "all" context.
-  const { systemFeed: recentLogs } = await fetchActivityLogs(user || { role: 'admin' }, { limit: 15 });
+  // Fetch all base data in PARALLEL instead of sequentially
+  // This reduces total DB time from sum-of-all to max-of-one
+  const [appointments, invoices, patients, { systemFeed: recentLogs }] = await Promise.all([
+    prisma.appointment.findMany({
+      where: { appointment_date: { gte: sixMonthsAgo } },
+      select: { appointment_date: true, status: true, id: true }
+    }),
+    prisma.invoice.findMany({
+      where: { date: { gte: sixMonthsAgo }, status: 'PAID' },
+      select: { date: true, total: true }
+    }),
+    prisma.patient.findMany({
+      where: { created_at: { gte: sixMonthsAgo } },
+      select: { created_at: true }
+    }),
+    fetchActivityLogs(user || { role: 'admin' }, { limit: 15 })
+  ]);
 
   const getMonthAbbr = (date) => new Date(date).toLocaleString('default', { month: 'short' });
 
@@ -180,16 +177,18 @@ const fetchActivityLogs = async (user, options = {}) => {
 
   if (user && user.role === 'therapist') {
     // Role-Based Filtering: Therapist sees their own logs OR logs tied to them
-    const assignedPatients = await prisma.patient.findMany({
-      where: { therapist_id: user.id },
-      select: { id: true }
-    });
+    // Parallel fetch for both related entity lists
+    const [assignedPatients, assignedAppointments] = await Promise.all([
+      prisma.patient.findMany({
+        where: { therapist_id: user.id },
+        select: { id: true }
+      }),
+      prisma.appointment.findMany({
+        where: { therapist_id: user.id },
+        select: { id: true }
+      })
+    ]);
     const patientIds = assignedPatients.map(p => String(p.id));
-
-    const assignedAppointments = await prisma.appointment.findMany({
-      where: { therapist_id: user.id },
-      select: { id: true }
-    });
     const appointmentIds = assignedAppointments.map(a => String(a.id));
 
     where.OR = [
@@ -199,15 +198,17 @@ const fetchActivityLogs = async (user, options = {}) => {
     ];
   }
 
-  const logs = await prisma.systemActivityLog.findMany({
-    where,
-    take,
-    skip,
-    orderBy: { created_at: 'desc' },
-    include: { user: { select: { name: true } } }
-  });
-
-  const total = await prisma.systemActivityLog.count({ where });
+  // Parallel: fetch logs + count total at the same time
+  const [logs, total] = await Promise.all([
+    prisma.systemActivityLog.findMany({
+      where,
+      take,
+      skip,
+      orderBy: { created_at: 'desc' },
+      include: { user: { select: { name: true } } }
+    }),
+    prisma.systemActivityLog.count({ where })
+  ]);
 
   const summaryOnly = String(user?.role || '').toLowerCase() !== 'admin';
   return {
@@ -222,20 +223,6 @@ const fetchActivityLogs = async (user, options = {}) => {
 };
 
 const getStaffOverview = async ({ month, year } = {}) => {
-  const staffRows = await prisma.user.findMany({
-    where: {
-      role: { in: ['admin', 'therapist', 'receptionist', 'billing'] }
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      created_at: true
-    },
-    orderBy: { name: 'asc' }
-  });
-
   // Build date filter for appointments (month scope)
   const apptWhere = {};
   if (month !== undefined && year !== undefined) {
@@ -246,17 +233,33 @@ const getStaffOverview = async ({ month, year } = {}) => {
     apptWhere.appointment_date = { gte: startOfMonth, lte: endOfMonth };
   }
 
-  const appointments = await prisma.appointment.findMany({
-    where: apptWhere,
-    select: {
-      id: true,
-      therapist_id: true,
-      status: true,
-      appointment_date: true,
-      service: { select: { price: true, name: true } },
-      patient: { select: { first_name: true, last_name: true } }
-    }
-  });
+  // Parallel fetch: staff list + appointments at the same time
+  const [staffRows, appointments] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        role: { in: ['admin', 'therapist', 'receptionist', 'billing'] }
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        created_at: true
+      },
+      orderBy: { name: 'asc' }
+    }),
+    prisma.appointment.findMany({
+      where: apptWhere,
+      select: {
+        id: true,
+        therapist_id: true,
+        status: true,
+        appointment_date: true,
+        service: { select: { price: true, name: true } },
+        patient: { select: { first_name: true, last_name: true } }
+      }
+    })
+  ]);
 
   const today = new Date();
   const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().slice(0, 10);

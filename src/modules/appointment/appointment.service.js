@@ -78,8 +78,7 @@ const getAllAppointments = async (filters) => {
     where.patient_id = parseInt(patientId, 10);
   }
 
-  // Filter out cancelled appointments and deleted patients
-  where.status = { not: 'cancelled' };
+  // Keep deleted patients out, but include all appointment statuses (including cancelled)
   where.patient = { is_deleted: false };
 
   return await prisma.appointment.findMany({
@@ -122,7 +121,10 @@ const updateAppointment = async (id, data) => {
     throw error;
   }
 
-  const { appointmentDate, therapistId, serviceId, room, startTime, endTime, notes } = data;
+  const { appointmentDate, therapistId, serviceId, room, startTime, endTime, notes, status } = data;
+  const normalizedStatus = status === undefined
+    ? undefined
+    : (String(status).toLowerCase() === 'confirmed' ? 'scheduled' : String(status).toLowerCase());
 
   if (therapistId !== undefined) {
     const therapist = await prisma.user.findUnique({ where: { id: therapistId } });
@@ -160,10 +162,14 @@ const updateAppointment = async (id, data) => {
   }
   if (therapistId !== undefined) updateData.therapist_id = therapistId;
   if (serviceId !== undefined) updateData.service_id = serviceId;
+  if (normalizedStatus !== undefined) updateData.status = normalizedStatus;
   if (room !== undefined) updateData.room = room;
   if (startTime !== undefined) updateData.start_time = startTime ? new Date(startTime) : null;
   if (endTime !== undefined) updateData.end_time = endTime ? new Date(endTime) : null;
   if (notes !== undefined) updateData.notes = notes;
+  if (normalizedStatus === 'checked_in') {
+    updateData.checked_in_at = new Date();
+  }
 
   return await prisma.appointment.update({
     where: { id },
@@ -189,29 +195,13 @@ const deleteAppointment = async (id) => {
 };
 
 const updateAppointmentStatus = async (id, rawStatus) => {
-  const status = rawStatus.toLowerCase();
+  const status = String(rawStatus || '').toLowerCase() === 'confirmed'
+    ? 'scheduled'
+    : String(rawStatus || '').toLowerCase();
   const appointment = await prisma.appointment.findUnique({ where: { id } });
   if (!appointment) {
     const error = new Error('Appointment not found');
     error.statusCode = 404;
-    throw error;
-  }
-
-  const validFlow = {
-    scheduled: ['checked_in', 'cancelled', 'no_show'],
-    confirmed: ['checked_in', 'cancelled', 'no_show'],
-    checked_in: ['completed', 'cancelled'],
-    completed: [],
-    cancelled: [],
-    // Real-world late arrival: no-show can be recovered if patient eventually arrives.
-    no_show: ['checked_in', 'cancelled']
-  };
-
-  const currentStatus = appointment.status;
-  const allowedNext = validFlow[currentStatus] || [];
-  if (!allowedNext.includes(status)) {
-    const error = new Error(`Invalid status transition from ${currentStatus} to ${status}`);
-    error.statusCode = 400;
     throw error;
   }
 

@@ -32,7 +32,7 @@ const createPatient = async (req, res) => {
   try {
     const patient = await patientService.createPatient(req.body);
 
-    await logActivity(
+    logActivity(
       req.user?.id, 
       'CREATE_PATIENT', 
       patient.id, 
@@ -86,7 +86,7 @@ const updatePatient = async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const patient = await patientService.updatePatient(id, req.body);
-    await logActivity(
+    logActivity(
       req.user?.id,
       'UPDATE_PATIENT',
       patient.id,

@@ -1,5 +1,11 @@
 const Joi = require('joi');
 
+const emergencyContactSchema = Joi.object({
+  name: Joi.string().trim().allow('', null).optional(),
+  phone: Joi.string().trim().allow('', null).optional(),
+  relation: Joi.string().trim().allow('', null).optional()
+}).optional();
+
 /**
  * Validate patient creation data
  * @param {Object} data - Patient data to validate
@@ -16,7 +22,8 @@ const createPatientValidation = (data) => {
     address: Joi.string().trim().allow(null, '').optional(),
     patientType: Joi.string().trim().allow(null, '').optional(),
     behaviour: Joi.string().trim().allow(null, '').optional(),
-    therapistId: Joi.number().integer().allow(null).optional()
+    therapistId: Joi.number().integer().allow(null).optional(),
+    emergencyContact: emergencyContactSchema
   }).unknown(true);
 
   return schema.validate(data, { abortEarly: false });
@@ -42,7 +49,8 @@ const updatePatientValidation = (data) => {
     isActive: Joi.boolean().optional(),
     allowSms: Joi.boolean().optional(),
     allowEmail: Joi.boolean().optional(),
-    allowNotifications: Joi.boolean().optional()
+    allowNotifications: Joi.boolean().optional(),
+    emergencyContact: emergencyContactSchema
   }).unknown(true);
 
   return schema.validate(data, { abortEarly: false });

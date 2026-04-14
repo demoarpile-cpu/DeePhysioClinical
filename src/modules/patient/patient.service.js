@@ -30,7 +30,19 @@ const getAllPatients = async (scope = 'read') => {
  * @returns {Object} Created patient
  */
 const createPatient = async (patientData) => {
-  const { firstName, lastName, phone, email, gender, dateOfBirth, address, patientType, behaviour, therapistId } = patientData;
+  const {
+    firstName,
+    lastName,
+    phone,
+    email,
+    gender,
+    dateOfBirth,
+    address,
+    patientType,
+    behaviour,
+    therapistId,
+    emergencyContact
+  } = patientData;
 
   // Check duplicate phone
   const existingPhone = await prisma.patient.findUnique({
@@ -56,20 +68,39 @@ const createPatient = async (patientData) => {
     }
   }
 
-  // Create patient
-  const patient = await prisma.patient.create({
-    data: {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      phone: phone.trim(),
-      email: email ? email.trim().toLowerCase() : null,
-      gender,
-      date_of_birth: dateOfBirth ? new Date(dateOfBirth) : null,
-      address: address ? address.trim() : null,
-      patient_type: patientType || 'Normal',
-      behaviour: behaviour || 'green',
-      therapist_id: therapistId || null
+  const emergencyName = String(emergencyContact?.name || '').trim();
+  const emergencyPhone = String(emergencyContact?.phone || '').trim();
+  const emergencyRelation = String(emergencyContact?.relation || '').trim();
+
+  // Create patient + optional emergency contact atomically
+  const patient = await prisma.$transaction(async (tx) => {
+    const createdPatient = await tx.patient.create({
+      data: {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone: phone.trim(),
+        email: email ? email.trim().toLowerCase() : null,
+        gender,
+        date_of_birth: dateOfBirth ? new Date(dateOfBirth) : null,
+        address: address ? address.trim() : null,
+        patient_type: patientType || 'Normal',
+        behaviour: behaviour || 'green',
+        therapist_id: therapistId || null
+      }
+    });
+
+    if (emergencyName && emergencyPhone) {
+      await tx.patientEmergencyContact.create({
+        data: {
+          patient_id: createdPatient.id,
+          name: emergencyName,
+          phone: emergencyPhone,
+          relation: emergencyRelation || null
+        }
+      });
     }
+
+    return createdPatient;
   });
 
   return patient;
@@ -120,7 +151,23 @@ const updatePatient = async (id, patientData) => {
     throw error;
   }
 
-  const { firstName, lastName, phone, email, gender, dateOfBirth, address, patientType, behaviour, therapistId, isActive, allowSms, allowEmail, allowNotifications } = patientData;
+  const {
+    firstName,
+    lastName,
+    phone,
+    email,
+    gender,
+    dateOfBirth,
+    address,
+    patientType,
+    behaviour,
+    therapistId,
+    isActive,
+    allowSms,
+    allowEmail,
+    allowNotifications,
+    emergencyContact
+  } = patientData;
 
   // Check duplicate phone (exclude current patient)
   if (phone) {
@@ -185,9 +232,49 @@ const updatePatient = async (id, patientData) => {
   if (allowEmail !== undefined) updateData.allow_email = allowEmail;
   if (allowNotifications !== undefined) updateData.allow_notifications = allowNotifications;
 
-  const patient = await prisma.patient.update({
-    where: { id },
-    data: updateData
+  const emergencyName = String(emergencyContact?.name || '').trim();
+  const emergencyPhone = String(emergencyContact?.phone || '').trim();
+  const emergencyRelation = String(emergencyContact?.relation || '').trim();
+
+  const patient = await prisma.$transaction(async (tx) => {
+    const updatedPatient = await tx.patient.update({
+      where: { id },
+      data: updateData
+    });
+
+    if (emergencyContact !== undefined) {
+      const existingPrimary = await tx.patientEmergencyContact.findFirst({
+        where: { patient_id: id },
+        orderBy: { id: 'asc' }
+      });
+
+      if (emergencyName && emergencyPhone) {
+        if (existingPrimary) {
+          await tx.patientEmergencyContact.update({
+            where: { id: existingPrimary.id },
+            data: {
+              name: emergencyName,
+              phone: emergencyPhone,
+              relation: emergencyRelation || null
+            }
+          });
+        } else {
+          await tx.patientEmergencyContact.create({
+            data: {
+              patient_id: id,
+              name: emergencyName,
+              phone: emergencyPhone,
+              relation: emergencyRelation || null
+            }
+          });
+        }
+      } else if (existingPrimary) {
+        // If user clears emergency contact fields, remove the stored primary contact.
+        await tx.patientEmergencyContact.delete({ where: { id: existingPrimary.id } });
+      }
+    }
+
+    return updatedPatient;
   });
 
   return patient;

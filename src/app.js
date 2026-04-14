@@ -8,7 +8,7 @@ const app = express();
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://deephysiosoftware.kiaansoftware.com',
-  "https://deephysioclinic.netlify.app/login"
+  "https://deephysioclinic.netlify.app"
 ];
 
 const corsOptions = {

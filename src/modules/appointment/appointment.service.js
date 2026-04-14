@@ -33,7 +33,24 @@ const createAppointment = async (data) => {
     throw error;
   }
 
-  // 5. Create appointment
+  // 5. Prevent Double Booking Clash
+  if (startTime) {
+    const existingClash = await prisma.appointment.findFirst({
+      where: {
+        therapist_id: therapistId,
+        start_time: startTime ? new Date(startTime) : null,
+        status: { notIn: ['cancelled'] }
+      }
+    });
+
+    if (existingClash) {
+      const error = new Error('This time slot is already booked for the selected practitioner. Please choose another.');
+      error.statusCode = 409;
+      throw error;
+    }
+  }
+
+  // 6. Create appointment
   const appointment = await prisma.appointment.create({
     data: {
       patient_id: patientId,

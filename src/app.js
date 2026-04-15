@@ -6,10 +6,12 @@ const app = express();
 
 // Core Middleware
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173',
   'http://deephysiosoftware.kiaansoftware.com',
-  "https://deephysioclinic.netlify.app"
-];
+  'https://deephysiosoftware.kiaansoftware.com',
+  'https://deephysioclinic.netlify.app',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
 const corsOptions = {
   origin: function (origin, callback) {

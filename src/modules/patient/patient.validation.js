@@ -18,7 +18,7 @@ const createPatientValidation = (data) => {
     phone: Joi.string().trim().min(10).max(15).required(),
     email: Joi.string().email().trim().allow(null, '').optional(),
     gender: Joi.string().valid('male', 'female', 'other').lowercase().allow(null, '').optional(),
-    dateOfBirth: Joi.date().allow(null, '').optional(),
+    dateOfBirth: Joi.date().required(),
     address: Joi.string().trim().allow(null, '').optional(),
     patientType: Joi.string().trim().allow(null, '').optional(),
     behaviour: Joi.string().trim().allow(null, '').optional(),

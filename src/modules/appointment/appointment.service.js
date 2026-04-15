@@ -103,7 +103,7 @@ const getAllAppointments = async (filters) => {
     include: {
       patient: { select: { id: true, first_name: true, last_name: true } },
       therapist: { select: { id: true, name: true } },
-      service: { select: { id: true, name: true } }
+      service: { select: { id: true, name: true, price: true } }
     },
     orderBy: {
       appointment_date: 'asc'
@@ -117,7 +117,7 @@ const getAppointmentById = async (id) => {
     include: {
       patient: { select: { id: true, first_name: true, last_name: true } },
       therapist: { select: { id: true, name: true } },
-      service: { select: { id: true, name: true } }
+      service: { select: { id: true, name: true, price: true } }
     }
   });
 
@@ -194,7 +194,7 @@ const updateAppointment = async (id, data) => {
     include: {
       patient: { select: { id: true, first_name: true, last_name: true } },
       therapist: { select: { id: true, name: true } },
-      service: { select: { id: true, name: true } }
+      service: { select: { id: true, name: true, price: true } }
     }
   });
 };
@@ -233,7 +233,7 @@ const updateAppointmentStatus = async (id, rawStatus) => {
     include: {
       patient: { select: { id: true, first_name: true, last_name: true } },
       therapist: { select: { id: true, name: true } },
-      service: { select: { id: true, name: true } }
+      service: { select: { id: true, name: true, price: true } }
     }
   });
 };

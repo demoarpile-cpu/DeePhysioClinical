@@ -130,4 +130,4 @@ app.use('/api/integrations', verifyToken, requireModuleAccess('Settings'), integ
 const { errorHandler } = require('./middleware/error.middleware');
 app.use(errorHandler);
 
-module.exports = app;
+module.exports = app;  

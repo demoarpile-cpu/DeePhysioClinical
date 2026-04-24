@@ -2,6 +2,7 @@ const prisma = require('../../config/prisma');
 
 const getAllTemplates = async () => {
   return await prisma.formTemplate.findMany({
+    where: { is_active: true },
     orderBy: { name: 'asc' }
   });
 };
@@ -42,8 +43,21 @@ const updateTemplate = async (id, data) => {
 };
 
 const deleteTemplate = async (id) => {
+  const templateId = parseInt(id, 10);
+  
+  const submissionsCount = await prisma.formSubmission.count({
+    where: { form_template_id: templateId }
+  });
+
+  if (submissionsCount > 0) {
+    return await prisma.formTemplate.update({
+      where: { id: templateId },
+      data: { is_active: false }
+    });
+  }
+
   return await prisma.formTemplate.delete({
-    where: { id: parseInt(id, 10) }
+    where: { id: templateId }
   });
 };
 

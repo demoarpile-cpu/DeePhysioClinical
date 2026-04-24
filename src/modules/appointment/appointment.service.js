@@ -69,20 +69,35 @@ const createAppointment = async (data) => {
 };
 
 const getAllAppointments = async (filters) => {
-  const { date, therapistId, patientId } = filters;
+  const { date, therapistId, patientId, startDate, endDate } = filters;
 
   const where = {};
 
-  if (date) {
-    const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(date);
-    endDate.setHours(23, 59, 59, 999);
+  // Date Range Filter (Precedence)
+  if (startDate && endDate) {
+    const s = new Date(startDate);
+    s.setHours(0, 0, 0, 0);
+    const e = new Date(endDate);
+    e.setHours(23, 59, 59, 999);
 
-    if (!isNaN(startDate.getTime())) {
+    if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
       where.appointment_date = {
-        gte: startDate,
-        lte: endDate
+        gte: s,
+        lte: e
+      };
+    }
+  } 
+  // Single Date Filter
+  else if (date) {
+    const s = new Date(date);
+    s.setHours(0, 0, 0, 0);
+    const e = new Date(date);
+    e.setHours(23, 59, 59, 999);
+
+    if (!isNaN(s.getTime())) {
+      where.appointment_date = {
+        gte: s,
+        lte: e
       };
     }
   }

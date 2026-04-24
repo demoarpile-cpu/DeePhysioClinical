@@ -1,16 +1,22 @@
 const prisma = require('../../config/prisma');
 
 const getAllPayments = async (filters) => {
-  const { patientId, invoiceId } = filters;
+  const { patientId, invoiceId, startDate, endDate } = filters;
   const where = {};
 
   if (patientId) where.patient_id = parseInt(patientId, 10);
   if (invoiceId) where.invoice_id = invoiceId;
 
+  if (startDate || endDate) {
+    where.date = {};
+    if (startDate) where.date.gte = new Date(startDate);
+    if (endDate) where.date.lte = new Date(endDate);
+  }
+
   return await prisma.payment.findMany({
     where,
     include: {
-      patient: { select: { id: true, first_name: true, last_name: true } },
+      patient: { select: { id: true, first_name: true, last_name: true, patient_type: true } },
       invoice: true
     },
     orderBy: { date: 'desc' }

@@ -32,6 +32,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
   ],
   receptionist: [
     'patient.basic',
+    'patient.write',
     'appointments.manage',
     'billing.view',
     'forms.manage',

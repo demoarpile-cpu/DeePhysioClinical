@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('./communication.controller');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 const { verifyToken } = require('../auth/auth.middleware');
 const { authorizeRoles } = require('../auth/role.middleware');
 const {
@@ -64,5 +66,7 @@ router.post(
   },
   controller.createTelehealthSession
 );
+
+router.post('/send-email', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist'), upload.single('pdfDocument'), controller.sendDirectEmail);
 
 module.exports = router;

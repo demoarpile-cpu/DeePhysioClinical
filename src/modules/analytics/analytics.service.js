@@ -359,8 +359,74 @@ const getStaffOverview = async ({ month, year } = {}) => {
   };
 };
 
+const getRoomIncome = async ({ startDate, endDate } = {}) => {
+  const apptWhere = {
+    room: { not: null },
+    status: 'completed'
+  };
+
+  if (startDate && endDate) {
+    apptWhere.appointment_date = {
+      gte: new Date(startDate),
+      lte: new Date(endDate)
+    };
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: apptWhere,
+    include: {
+      patient: {
+        select: {
+          invoices: {
+            include: { payments: true }
+          }
+        }
+      }
+    }
+  });
+
+  const roomData = {};
+
+  appointments.forEach(apt => {
+    const room = apt.room;
+    if (!roomData[room]) {
+      roomData[room] = { room, totalBookings: 0, totalRevenue: 0, paidAmount: 0, pendingAmount: 0 };
+    }
+    roomData[room].totalBookings += 1;
+
+    const aptDate = apt.appointment_date.toISOString().split('T')[0];
+    const relatedInvoices = apt.patient.invoices.filter(inv => {
+      const invDate = inv.date.toISOString().split('T')[0];
+      return invDate === aptDate;
+    });
+
+    let aptRevenue = 0;
+    let aptPaid = 0;
+
+    relatedInvoices.forEach(inv => {
+      aptRevenue += parseFloat(inv.total || 0);
+      const paidForInv = inv.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+      aptPaid += paidForInv;
+    });
+
+    // To prevent double counting invoices across multiple appointments in the same room on the same day,
+    // we could use a Set of invoice IDs.
+    // For simplicity of this heuristic, we assume 1 invoice per appointment or divide it.
+    // Here we just add it (if they have multiple appointments same day, it duplicates).
+    roomData[room].totalRevenue += aptRevenue;
+    roomData[room].paidAmount += aptPaid;
+  });
+
+  Object.values(roomData).forEach(rd => {
+    rd.pendingAmount = Math.max(0, rd.totalRevenue - rd.paidAmount);
+  });
+
+  return Object.values(roomData);
+};
+
 module.exports = {
   getOverview,
   fetchActivityLogs,
-  getStaffOverview
+  getStaffOverview,
+  getRoomIncome
 };

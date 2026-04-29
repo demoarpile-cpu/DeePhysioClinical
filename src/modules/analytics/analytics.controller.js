@@ -38,8 +38,22 @@ const getStaffOverview = async (req, res, next) => {
   }
 };
 
+const getRoomIncome = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const data = await analyticsService.getRoomIncome({ startDate, endDate });
+    return res.status(200).json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getOverview,
   getActivities,
-  getStaffOverview
+  getStaffOverview,
+  getRoomIncome
 };

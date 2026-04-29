@@ -93,6 +93,29 @@ const listTelehealthSessions = async (req, res) => {
   }
 };
 
+const sendDirectEmail = async (req, res) => {
+  try {
+    const { patientId, subject, body } = req.body;
+    const file = req.file;
+
+    if (!patientId || !file) {
+      return res.status(400).json({ success: false, message: 'Patient ID and PDF document are required.' });
+    }
+
+    const data = await service.sendDirectEmail({
+      patientId: parseInt(patientId, 10),
+      subject: subject || 'Your Clinical Document',
+      body: body || 'Please find your clinical document attached.',
+      file,
+      createdBy: req.user?.id
+    });
+
+    return res.status(200).json({ success: true, data, message: 'Email sent successfully.' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+  }
+};
+
 module.exports = {
   listThreads,
   createThread,
@@ -101,5 +124,6 @@ module.exports = {
   createCampaign,
   listCampaigns,
   createTelehealthSession,
-  listTelehealthSessions
+  listTelehealthSessions,
+  sendDirectEmail
 };

@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const { Prisma } = require('@prisma/client');
 const { getAdapters } = require('../../integrations');
+const nodemailer = require('nodemailer');
 
 let schemaEnsured = false;
 const ensureCommunicationSchema = async () => {
@@ -161,6 +162,66 @@ const listTelehealthSessions = async ({ patientId }) => {
   return prisma.$queryRaw`SELECT * FROM telehealth_sessions ORDER BY created_at DESC`;
 };
 
+const sendDirectEmail = async ({ patientId, subject, body, file, createdBy }) => {
+  await ensureCommunicationSchema();
+  
+  // 1. Get patient email
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId }
+  });
+
+  if (!patient || !patient.email) {
+    throw new Error('Patient not found or email address is missing.');
+  }
+
+  // 2. Setup nodemailer transporter (using ethereal for dev or real SMTP)
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
+    port: process.env.SMTP_PORT || 587,
+    auth: {
+        user: process.env.SMTP_USER || 'leola.murphy@ethereal.email',
+        pass: process.env.SMTP_PASS || 'gT6k8A4W2t4P9G6xR8'
+    }
+  });
+
+  // 3. Send email with attachment
+  const info = await transporter.sendMail({
+    from: process.env.SMTP_FROM || '"DeePhysio Clinic" <noreply@deephysio.com>',
+    to: patient.email,
+    subject: subject,
+    text: body,
+    attachments: [
+      {
+        filename: file.originalname || 'Clinical_Document.pdf',
+        content: file.buffer,
+        contentType: file.mimetype || 'application/pdf'
+      }
+    ]
+  });
+
+  // 4. Log in communication tables
+  const threads = await prisma.$queryRaw`SELECT * FROM communication_threads WHERE channel = 'email' AND patient_id = ${Number(patientId)} LIMIT 1`;
+  let threadId;
+  
+  if (!threads || threads.length === 0) {
+    await prisma.$executeRaw`
+      INSERT INTO communication_threads (patient_id, channel, title, created_by)
+      VALUES (${Number(patientId)}, 'email', 'Clinical Documents', ${createdBy || null})
+    `;
+    const newThread = await prisma.$queryRaw`SELECT * FROM communication_threads ORDER BY id DESC LIMIT 1`;
+    threadId = newThread[0].id;
+  } else {
+    threadId = threads[0].id;
+  }
+
+  await prisma.$executeRaw`
+    INSERT INTO communication_messages (thread_id, patient_id, channel, direction, body, subject, delivery_status, external_id, created_by)
+    VALUES (${threadId}, ${Number(patientId)}, 'email', 'outbound', 'Emailed Clinical_Document.pdf', ${subject}, 'DELIVERED', ${info.messageId}, ${createdBy || null})
+  `;
+
+  return { messageId: info.messageId, email: patient.email };
+};
+
 module.exports = {
   listThreads,
   createThread,
@@ -169,5 +230,6 @@ module.exports = {
   createCampaign,
   listCampaigns,
   createTelehealthSession,
-  listTelehealthSessions
+  listTelehealthSessions,
+  sendDirectEmail
 };

@@ -104,6 +104,7 @@ const sendDirectEmail = async (req, res) => {
 
     const data = await service.sendDirectEmail({
       patientId: parseInt(patientId, 10),
+      recipientEmail: req.body.recipientEmail,
       subject: subject || 'Your Clinical Document',
       body: body || 'Please find your clinical document attached.',
       file,

@@ -162,7 +162,7 @@ const listTelehealthSessions = async ({ patientId }) => {
   return prisma.$queryRaw`SELECT * FROM telehealth_sessions ORDER BY created_at DESC`;
 };
 
-const sendDirectEmail = async ({ patientId, subject, body, file, createdBy }) => {
+const sendDirectEmail = async ({ patientId, recipientEmail, subject, body, file, createdBy }) => {
   await ensureCommunicationSchema();
   
   // 1. Get patient email
@@ -187,7 +187,7 @@ const sendDirectEmail = async ({ patientId, subject, body, file, createdBy }) =>
   // 3. Send email with attachment
   const info = await transporter.sendMail({
     from: process.env.SMTP_FROM || '"DeePhysio Clinic" <noreply@deephysio.com>',
-    to: patient.email,
+    to: recipientEmail || patient.email,
     subject: subject,
     text: body,
     attachments: [

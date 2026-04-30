@@ -33,18 +33,35 @@ const createAppointment = async (data) => {
     throw error;
   }
 
-  // 5. Prevent Double Booking Clash
-  if (startTime) {
+  // 5. Prevent Overlapping or Double Booking (Therapist or Room)
+  if (startTime && endTime) {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
     const existingClash = await prisma.appointment.findFirst({
       where: {
-        therapist_id: therapistId,
-        start_time: startTime ? new Date(startTime) : null,
-        status: { notIn: ['cancelled'] }
+        OR: [
+          { therapist_id: therapistId },
+          { room: room }
+        ],
+        status: { notIn: ['cancelled'] },
+        AND: [
+          { start_time: { lt: end } },
+          { end_time: { gt: start } }
+        ]
+      },
+      include: {
+        therapist: true
       }
     });
 
     if (existingClash) {
-      const error = new Error('This time slot is already booked for the selected practitioner. Please choose another.');
+      const isRoomClash = existingClash.room === room;
+      const message = isRoomClash 
+        ? `The room "${room}" is already occupied during this time slot.`
+        : `The practitioner ${existingClash.therapist.name} is already booked or has an overlapping appointment during this time.`;
+      
+      const error = new Error(message);
       error.statusCode = 409;
       throw error;
     }

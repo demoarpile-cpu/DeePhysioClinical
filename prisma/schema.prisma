@@ -8,20 +8,22 @@ datasource db {
 }
 
 model User {
-  id                  Int                 @id @default(autoincrement())
-  name                String
-  email               String              @unique
-  password            String
-  role                Role
-  allowed_menus       Json?
-  allowed_permissions Json?
-  allowed_actions     Json?
-  created_at          DateTime            @default(now())
-  updated_at          DateTime            @updatedAt
-  appointments        Appointment[]       @relation("TherapistAppointments")
-  clinical_notes      ClinicalNote[]      @relation("TherapistNotes")
-  assigned_patients   Patient[]           @relation("AssignedTherapist")
-  activity_logs       SystemActivityLog[]
+  id                   Int                 @id @default(autoincrement())
+  name                 String
+  email                String              @unique
+  password             String
+  role                 Role
+  allowed_menus        String?             @db.LongText
+  allowed_permissions  String?             @db.LongText
+  allowed_actions      String?             @db.LongText
+  created_at           DateTime            @default(now())
+  updated_at           DateTime            @updatedAt
+  resetPasswordExpires DateTime?
+  resetPasswordToken   String?             @db.VarChar(255)
+  appointments         Appointment[]       @relation("TherapistAppointments")
+  clinical_notes       ClinicalNote[]      @relation("TherapistNotes")
+  assigned_patients    Patient[]           @relation("AssignedTherapist")
+  activity_logs        SystemActivityLog[]
 
   @@map("users")
 }
@@ -167,7 +169,7 @@ model ClinicalNote {
   plan            String?  @db.Text
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
-  dynamic_content Json?
+  dynamic_content String?  @db.LongText
   patient         Patient  @relation("PatientNotes", fields: [patient_id], references: [id])
   therapist       User     @relation("TherapistNotes", fields: [therapist_id], references: [id])
 
@@ -230,9 +232,9 @@ model FormTemplate {
   id           Int              @id @default(autoincrement())
   name         String
   category     String
-  fields       Json
-  is_active    Boolean          @default(true)
+  fields       String           @db.LongText
   last_updated DateTime         @default(now()) @updatedAt
+  is_active    Boolean          @default(true)
   submissions  FormSubmission[] @relation("TemplateSubmissions")
 
   @@map("form_templates")
@@ -242,7 +244,7 @@ model FormSubmission {
   id               Int          @id @default(autoincrement())
   patient_id       Int
   form_template_id Int
-  responses        Json
+  responses        String       @db.LongText
   created_at       DateTime     @default(now())
   form_template    FormTemplate @relation("TemplateSubmissions", fields: [form_template_id], references: [id])
   patient          Patient      @relation("PatientForms", fields: [patient_id], references: [id])
@@ -316,7 +318,7 @@ model ClinicalNoteTemplate {
   id         Int      @id @default(autoincrement())
   title      String
   category   String
-  content    Json
+  content    String   @db.LongText
   isCustom   Boolean  @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -327,7 +329,7 @@ model ClinicalNoteTemplate {
 model GlobalSettings {
   id         Int      @id @default(autoincrement())
   key        String   @unique
-  value      Json
+  value      String   @db.LongText
   updated_at DateTime @updatedAt
 
   @@map("global_settings")
@@ -340,7 +342,7 @@ model Integration {
   category            String
   description         String?             @db.Text
   auth_type           IntegrationAuthType
-  config_schema       Json
+  config_schema       String              @db.LongText
   adapter_key         String              @default("generic")
   is_active           Boolean             @default(true)
   supports_connect    Boolean             @default(true)
@@ -359,8 +361,8 @@ model ClinicIntegration {
   connection_status     IntegrationConnectionStatus @default(DISCONNECTED)
   is_enabled            Boolean                     @default(false)
   encrypted_credentials String?                     @db.LongText
-  config                Json?
-  meta                  Json?
+  config                String?                     @db.LongText
+  meta                  String?                     @db.LongText
   connected_at          DateTime?
   disconnected_at       DateTime?
   last_health_check_at  DateTime?
@@ -380,7 +382,7 @@ model SystemActivityLog {
   target_id   String?
   target_type String?
   details     String?
-  meta        Json?
+  meta        String?          @db.LongText
   created_at  DateTime         @default(now())
   user        User?            @relation(fields: [user_id], references: [id])
 
@@ -411,6 +413,8 @@ model communication_messages {
   external_id     String?
   created_by      Int?
   created_at      DateTime @default(now())
+  is_starred      Boolean  @default(false)
+  is_deleted      Boolean  @default(false)
 
   @@index([patient_id], map: "idx_comm_messages_patient")
   @@index([thread_id], map: "idx_comm_messages_thread")

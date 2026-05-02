@@ -25,7 +25,15 @@ const loginValidation = (data) => {
 
 const forgotPasswordValidation = (data) => {
   const schema = Joi.object({
-    email: Joi.string().email().trim().required(),
+    email: Joi.string().email().trim().required()
+  }).unknown(false);
+
+  return schema.validate(data, { abortEarly: false });
+};
+
+const resetPasswordValidation = (data) => {
+  const schema = Joi.object({
+    token: Joi.string().required(),
     newPassword: Joi.string().min(6).required()
   }).unknown(false);
 
@@ -45,5 +53,6 @@ module.exports = {
   registerValidation,
   loginValidation,
   forgotPasswordValidation,
+  resetPasswordValidation,
   changePasswordValidation
 };

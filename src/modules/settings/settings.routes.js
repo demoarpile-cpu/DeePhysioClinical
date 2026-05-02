@@ -9,22 +9,30 @@ const { updateSettingsSchema } = require('./settings.validation');
 router.get('/', verifyToken, async (req, res, next) => {
   try {
     const keysStr = req.query.keys;
-    
+    let settings;
+
     if (!keysStr) {
-      // Return all settings if no keys requested
-      const allSettings = await prisma.globalSettings.findMany();
-      const settingsMap = {};
-      allSettings.forEach(s => { settingsMap[s.key] = s.value });
-      return res.json({ success: true, data: settingsMap });
+      settings = await prisma.globalSettings.findMany();
+    } else {
+      const keys = keysStr.split(',');
+      settings = await prisma.globalSettings.findMany({
+        where: { key: { in: keys } }
+      });
     }
 
-    const keys = keysStr.split(',');
-    const settings = await prisma.globalSettings.findMany({
-      where: { key: { in: keys } }
-    });
-
     const settingsMap = {};
-    settings.forEach(s => { settingsMap[s.key] = s.value });
+    settings.forEach(s => { 
+      try {
+        // Try to parse JSON if it looks like an object/array
+        if (s.value && (s.value.startsWith('{') || s.value.startsWith('['))) {
+          settingsMap[s.key] = JSON.parse(s.value);
+        } else {
+          settingsMap[s.key] = s.value;
+        }
+      } catch (e) {
+        settingsMap[s.key] = s.value;
+      }
+    });
 
     res.json({ success: true, data: settingsMap });
   } catch (error) {
@@ -33,8 +41,6 @@ router.get('/', verifyToken, async (req, res, next) => {
 });
 
 // POST update settings
-// Note: We use the global role check because 'therapist' might need to update custom note templates in settings,
-// but for standard settings, authorizeRoles('admin', 'therapist') works.
 router.post('/', verifyToken, authorizeRoles('admin', 'therapist', 'receptionist', 'billing'), async (req, res, next) => {
   try {
     const { error, value } = updateSettingsSchema.validate(req.body, { abortEarly: false });
@@ -50,11 +56,14 @@ router.post('/', verifyToken, authorizeRoles('admin', 'therapist', 'receptionist
 
     const updates = [];
     for (const [key, val] of Object.entries(settings)) {
+      // Ensure complex values are stringified for DB storage
+      const dbValue = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : String(val);
+      
       updates.push(
         prisma.globalSettings.upsert({
           where: { key },
-          update: { value: val },
-          create: { key, value: val }
+          update: { value: dbValue },
+          create: { key, value: dbValue }
         })
       );
     }

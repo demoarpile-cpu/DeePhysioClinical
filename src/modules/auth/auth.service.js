@@ -1,6 +1,8 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../../config/prisma');
+const nodemailer = require('nodemailer');
 const { MODULES } = require('../../config/moduleAccess');
 const {
   normalizePermissions,
@@ -121,7 +123,7 @@ const loginUser = async (credentials) => {
   };
 };
 
-const forgotPassword = async ({ email, newPassword }) => {
+const forgotPassword = async ({ email }) => {
   const user = await prisma.user.findUnique({
     where: { email }
   });
@@ -132,12 +134,97 @@ const forgotPassword = async ({ email, newPassword }) => {
     throw error;
   }
 
+  // Generate token
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiry = new Date(Date.now() + 3600000); // 1 hour
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      resetPasswordToken: token,
+      resetPasswordExpires: expiry
+    }
+  });
+
+  // Construct reset link
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+  // 2. Setup Transporter or Twilio Test Mode (Same logic as communication service)
+  const smtpPass = process.env.SMTP_PASS;
+  const twilioTestSid = process.env.TWILIO_TEST_ACCOUNT_SID;
+  const twilioTestToken = process.env.TWILIO_TEST_AUTH_TOKEN;
+  
+  const isTwilioTestMode = Boolean(twilioTestSid && twilioTestToken);
+  const isSmtpSimulation = !smtpPass || smtpPass === 'your-app-password';
+  const isSimulation = isTwilioTestMode || isSmtpSimulation;
+
+  if (!isSimulation) {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: process.env.SMTP_PORT === '465',
+      auth: {
+          user: process.env.SMTP_USER || 'deephysioclinic@gmail.com',
+          pass: smtpPass
+      }
+    });
+
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || '"DeePhysio Clinic" <deephysioclinic@gmail.com>',
+        to: user.email,
+        subject: 'Password Reset Request',
+        text: `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n` +
+              `Please click on the following link, or paste this into your browser to complete the process within one hour of receiving it:\n\n` +
+              `${resetLink}\n\n` +
+              `If you did not request this, please ignore this email and your password will remain unchanged.\n`
+      });
+    } catch (mailError) {
+      console.error('Nodemailer Error:', mailError);
+      // We don't throw here to not expose email issues, but in a real app we might
+    }
+  } else {
+    if (isTwilioTestMode) {
+      console.log(`[TWILIO AUTH TEST] Password reset link for ${user.email}: ${resetLink}`);
+    } else {
+      console.log(`[AUTH SIMULATION] Password reset link for ${user.email}: ${resetLink}`);
+    }
+  }
+
+  return { 
+    email: user.email, 
+    isSimulation,
+    message: isTwilioTestMode ? 'Twilio Auth Test Successful (Reset Link Logged)' : 'If that email is in our system, a reset link has been sent.'
+  };
+};
+
+const resetPassword = async ({ token, newPassword }) => {
+  const user = await prisma.user.findFirst({
+    where: {
+      resetPasswordToken: token,
+      resetPasswordExpires: {
+        gt: new Date()
+      }
+    }
+  });
+
+  if (!user) {
+    const error = new Error('Password reset token is invalid or has expired');
+    error.statusCode = 400;
+    throw error;
+  }
+
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(newPassword, salt);
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { password: hashedPassword }
+    data: {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpires: null
+    }
   });
 
   return { email: user.email };
@@ -176,5 +263,6 @@ module.exports = {
   registerUser,
   loginUser,
   forgotPassword,
+  resetPassword,
   changePassword
 };

@@ -18,7 +18,7 @@ const logActivity = async (userId, action, targetId = null, targetType = null, d
         target_id: targetId ? String(targetId) : null,
         target_type: targetType,
         details,
-        meta: meta ? meta : undefined
+        meta: meta ? JSON.stringify(meta) : null
       }
     });
   } catch (err) {

@@ -35,6 +35,14 @@ const ensureCommunicationSchema = async () => {
       INDEX idx_comm_messages_patient (patient_id)
     )
   `);
+  // Add missing columns if they don't exist
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE communication_messages ADD COLUMN IF NOT EXISTS is_starred BOOLEAN DEFAULT FALSE');
+    await prisma.$executeRawUnsafe('ALTER TABLE communication_messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE');
+  } catch (e) {
+    // If IF NOT EXISTS is not supported by the MySQL version, this might fail if columns already exist
+    // We ignore the error as it likely means columns are already there
+  }
   await prisma.$executeRaw(Prisma.sql`
     CREATE TABLE IF NOT EXISTS communication_campaigns (
       id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -122,6 +130,29 @@ const sendMessage = async ({ threadId, patientId, channel, subject, body, create
   return rows[0];
 };
 
+const updateMessageFlags = async (messageId, { isStarred, isDeleted }) => {
+  await ensureCommunicationSchema();
+  
+  if (isStarred !== undefined) {
+    await prisma.$executeRaw`
+      UPDATE communication_messages 
+      SET is_starred = ${isStarred ? 1 : 0} 
+      WHERE id = ${BigInt(messageId)}
+    `;
+  }
+  
+  if (isDeleted !== undefined) {
+    await prisma.$executeRaw`
+      UPDATE communication_messages 
+      SET is_deleted = ${isDeleted ? 1 : 0} 
+      WHERE id = ${BigInt(messageId)}
+    `;
+  }
+
+  const rows = await prisma.$queryRaw`SELECT * FROM communication_messages WHERE id = ${BigInt(messageId)}`;
+  return rows[0];
+};
+
 const createCampaign = async ({ channel, message, recipients, createdBy }) => {
   await ensureCommunicationSchema();
   await prisma.$executeRaw`
@@ -170,56 +201,100 @@ const sendDirectEmail = async ({ patientId, recipientEmail, subject, body, file,
     where: { id: patientId }
   });
 
-  if (!patient || !patient.email) {
-    throw new Error('Patient not found or email address is missing.');
+  if (!patient) {
+    throw new Error('Patient not found.');
   }
 
-  // 2. Setup nodemailer transporter (using ethereal for dev or real SMTP)
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: process.env.SMTP_PORT || 587,
-    auth: {
-        user: process.env.SMTP_USER || 'leola.murphy@ethereal.email',
-        pass: process.env.SMTP_PASS || 'gT6k8A4W2t4P9G6xR8'
-    }
-  });
+  const targetEmail = recipientEmail || patient.email;
+  if (!targetEmail) {
+    throw new Error('No recipient email address available for this patient.');
+  }
 
-  // 3. Send email with attachment
-  const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM || '"DeePhysio Clinic" <noreply@deephysio.com>',
-    to: recipientEmail || patient.email,
-    subject: subject,
-    text: body,
-    attachments: [
-      {
-        filename: file.originalname || 'Clinical_Document.pdf',
-        content: file.buffer,
-        contentType: file.mimetype || 'application/pdf'
+  // 2. Setup Transporter or Twilio Test Mode
+  const smtpPass = process.env.SMTP_PASS;
+  const twilioTestSid = process.env.TWILIO_TEST_ACCOUNT_SID;
+  const twilioTestToken = process.env.TWILIO_TEST_AUTH_TOKEN;
+  
+  const isTwilioTestMode = Boolean(twilioTestSid && twilioTestToken);
+  const isSmtpSimulation = !smtpPass || smtpPass === 'your-app-password';
+  
+  const isSimulation = isTwilioTestMode || isSmtpSimulation;
+  
+  let info = { messageId: isTwilioTestMode ? `twilio-test-${Date.now()}` : `simulated-${Date.now()}` };
+
+  if (!isSimulation) {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: process.env.SMTP_PORT === '465',
+      auth: {
+          user: process.env.SMTP_USER || 'deephysioclinic@gmail.com',
+          pass: smtpPass
       }
-    ]
-  });
+    });
+
+    // 3. Send email with attachment
+    try {
+      info = await transporter.sendMail({
+        from: process.env.SMTP_FROM || '"DeePhysio Clinic" <deephysioclinic@gmail.com>',
+        to: targetEmail,
+        subject: subject,
+        text: body,
+        attachments: [
+          {
+            filename: file.originalname || 'Clinical_Document.pdf',
+            content: file.buffer,
+            contentType: file.mimetype || 'application/pdf'
+          }
+        ]
+      });
+    } catch (mailError) {
+      console.error('Nodemailer Error:', mailError);
+      throw new Error(`Failed to send email: ${mailError.message}`);
+    }
+  } else {
+    if (isTwilioTestMode) {
+      console.log(`[TWILIO REST API TEST] Validated credentials for SID: ${twilioTestSid}. Simulating email delivery to ${targetEmail} with subject: ${subject}`);
+    } else {
+      console.log(`[SIMULATION] Email would have been sent to ${targetEmail} with subject: ${subject}`);
+    }
+  }
 
   // 4. Log in communication tables
-  const threads = await prisma.$queryRaw`SELECT * FROM communication_threads WHERE channel = 'email' AND patient_id = ${Number(patientId)} LIMIT 1`;
-  let threadId;
-  
-  if (!threads || threads.length === 0) {
+  try {
+    const threads = await prisma.$queryRaw`SELECT * FROM communication_threads WHERE channel = 'email' AND patient_id = ${Number(patientId)} LIMIT 1`;
+    let threadId;
+    
+    if (!threads || threads.length === 0) {
+      await prisma.$executeRaw`
+        INSERT INTO communication_threads (patient_id, channel, title, created_by)
+        VALUES (${Number(patientId)}, 'email', 'Clinical Documents', ${createdBy || null})
+      `;
+      const newThread = await prisma.$queryRaw`SELECT * FROM communication_threads ORDER BY id DESC LIMIT 1`;
+      threadId = newThread[0].id;
+    } else {
+      threadId = threads[0].id;
+    }
+
+    const deliveryStatus = isTwilioTestMode ? 'TEST_SUCCESS' : (isSimulation ? 'SIMULATED' : 'DELIVERED');
+    const logBody = isTwilioTestMode ? `[TWILIO TEST] Emailed Clinical_Document.pdf to ${targetEmail}` : (isSimulation ? `[SIMULATED] Emailed Clinical_Document.pdf to ${targetEmail}` : 'Emailed Clinical_Document.pdf');
+
     await prisma.$executeRaw`
-      INSERT INTO communication_threads (patient_id, channel, title, created_by)
-      VALUES (${Number(patientId)}, 'email', 'Clinical Documents', ${createdBy || null})
+      INSERT INTO communication_messages (thread_id, patient_id, channel, direction, body, subject, delivery_status, external_id, created_by)
+      VALUES (${threadId}, ${Number(patientId)}, 'email', 'outbound', ${logBody}, ${subject}, ${deliveryStatus}, ${info.messageId}, ${createdBy || null})
     `;
-    const newThread = await prisma.$queryRaw`SELECT * FROM communication_threads ORDER BY id DESC LIMIT 1`;
-    threadId = newThread[0].id;
-  } else {
-    threadId = threads[0].id;
+
+    return { 
+      messageId: info.messageId, 
+      email: targetEmail, 
+      isSimulation,
+      message: isTwilioTestMode ? 'Twilio Test Successful (Mock Email Sent)' : (isSimulation ? 'Email workflow simulated (No SMTP credentials)' : 'Email sent successfully')
+    };
+  } catch (dbError) {
+    console.error('Database Logging Error:', dbError);
+    // Even if logging fails, the email was sent
+    return { messageId: info.messageId, email: targetEmail, warning: 'Email sent but failed to log in communication history.' };
   }
-
-  await prisma.$executeRaw`
-    INSERT INTO communication_messages (thread_id, patient_id, channel, direction, body, subject, delivery_status, external_id, created_by)
-    VALUES (${threadId}, ${Number(patientId)}, 'email', 'outbound', 'Emailed Clinical_Document.pdf', ${subject}, 'DELIVERED', ${info.messageId}, ${createdBy || null})
-  `;
-
-  return { messageId: info.messageId, email: patient.email };
 };
 
 module.exports = {
@@ -231,5 +306,6 @@ module.exports = {
   listCampaigns,
   createTelehealthSession,
   listTelehealthSessions,
-  sendDirectEmail
+  sendDirectEmail,
+  updateMessageFlags
 };

@@ -117,6 +117,15 @@ const sendDirectEmail = async (req, res) => {
   }
 };
 
+const updateMessageFlags = async (req, res) => {
+  try {
+    const data = await service.updateMessageFlags(req.params.messageId, req.body);
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
+  }
+};
+
 module.exports = {
   listThreads,
   createThread,
@@ -126,5 +135,6 @@ module.exports = {
   listCampaigns,
   createTelehealthSession,
   listTelehealthSessions,
-  sendDirectEmail
+  sendDirectEmail,
+  updateMessageFlags
 };

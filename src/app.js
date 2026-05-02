@@ -1,5 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+
+// Fix for Prisma BigInt serialization
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 const { verifyToken } = require('./modules/auth/auth.middleware');
 const { requireModuleAccess } = require('./modules/auth/moduleAccess.middleware');
 const app = express();
@@ -47,7 +53,15 @@ app.get('/api/public/config', async (req, res, next) => {
     const prisma = require('./config/prisma');
     const profile = await prisma.globalSettings.findUnique({ where: { key: 'clinicProfile' } });
     if (!profile) return res.json({ success: true, data: {} });
-    return res.json({ success: true, data: { clinicProfile: profile.value } });
+    
+    let profileValue = profile.value;
+    try {
+      if (profileValue && typeof profileValue === 'string' && profileValue.startsWith('{')) {
+        profileValue = JSON.parse(profileValue);
+      }
+    } catch (e) {}
+    
+    return res.json({ success: true, data: { clinicProfile: profileValue } });
   } catch (err) {
     next(err);
   }

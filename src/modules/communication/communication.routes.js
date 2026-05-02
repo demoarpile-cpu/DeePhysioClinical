@@ -12,13 +12,13 @@ const {
   createTelehealthSessionValidation
 } = require('./communication.validation');
 
-router.get('/threads', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist'), controller.listThreads);
-router.post('/threads', verifyToken, authorizeRoles('admin', 'billing'), controller.createThread);
-router.get('/threads/:threadId/messages', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist'), controller.listMessages);
+router.get('/threads', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist', 'administrator'), controller.listThreads);
+router.post('/threads', verifyToken, authorizeRoles('admin', 'billing', 'administrator'), controller.createThread);
+router.get('/threads/:threadId/messages', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist', 'administrator'), controller.listMessages);
 router.post(
   '/threads/:threadId/messages',
   verifyToken,
-  authorizeRoles('admin', 'billing'),
+  authorizeRoles('admin', 'billing', 'administrator'),
   (req, res, next) => {
     const { error } = threadIdParamValidation(req.params);
     if (error) return res.status(400).json({ success: false, message: 'Invalid thread ID' });
@@ -39,7 +39,7 @@ router.get('/campaigns', verifyToken, authorizeRoles('admin', 'billing', 'therap
 router.post(
   '/campaigns',
   verifyToken,
-  authorizeRoles('admin', 'billing'),
+  authorizeRoles('admin', 'billing', 'administrator'),
   (req, res, next) => {
     const { error } = createCampaignValidation(req.body);
     if (error) {
@@ -55,7 +55,7 @@ router.get('/telehealth/sessions', verifyToken, authorizeRoles('admin', 'billing
 router.post(
   '/telehealth/sessions',
   verifyToken,
-  authorizeRoles('admin', 'billing', 'therapist'),
+  authorizeRoles('admin', 'billing', 'therapist', 'administrator'),
   (req, res, next) => {
     const { error } = createTelehealthSessionValidation(req.body);
     if (error) {
@@ -67,6 +67,7 @@ router.post(
   controller.createTelehealthSession
 );
 
-router.post('/send-email', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist'), upload.single('pdfDocument'), controller.sendDirectEmail);
+router.post('/send-email', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist', 'administrator'), upload.single('pdfDocument'), controller.sendDirectEmail);
+router.put('/messages/:messageId/flags', verifyToken, authorizeRoles('admin', 'billing', 'therapist', 'receptionist', 'administrator'), controller.updateMessageFlags);
 
 module.exports = router;

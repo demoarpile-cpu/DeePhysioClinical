@@ -50,7 +50,23 @@ const forgotPassword = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: result,
-      message: 'Password reset successful. Please login with your new password.'
+      message: result.message || 'If that email is in our system, a reset link has been sent.'
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const result = await authService.resetPassword(req.body);
+    return res.status(200).json({
+      success: true,
+      data: result,
+      message: 'Password has been reset successfully. You can now login with your new password.'
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
@@ -81,5 +97,6 @@ module.exports = {
   registerUser,
   loginUser,
   forgotPassword,
+  resetPassword,
   changePassword
 };

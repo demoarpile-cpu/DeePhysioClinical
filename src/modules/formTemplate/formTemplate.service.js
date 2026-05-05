@@ -1,9 +1,15 @@
 const prisma = require('../../config/prisma');
 
 const getAllTemplates = async () => {
-  return await prisma.formTemplate.findMany({
+  const templates = await prisma.formTemplate.findMany({
     where: { is_active: true },
     orderBy: { name: 'asc' }
+  });
+  return templates.map(t => {
+    if (t.fields && typeof t.fields === 'string') {
+      try { t.fields = JSON.parse(t.fields); } catch(e) {}
+    }
+    return t;
   });
 };
 
@@ -18,26 +24,32 @@ const getTemplateById = async (id) => {
     throw error;
   }
 
+  if (template.fields && typeof template.fields === 'string') {
+    try { template.fields = JSON.parse(template.fields); } catch(e) {}
+  }
+
   return template;
 };
 
 const createTemplate = async (data) => {
+  const fieldsData = typeof data.fields === 'string' ? data.fields : JSON.stringify(data.fields || []);
   return await prisma.formTemplate.create({
     data: {
       name: data.name,
       category: data.category,
-      fields: data.fields
+      fields: fieldsData
     }
   });
 };
 
 const updateTemplate = async (id, data) => {
+  const fieldsData = typeof data.fields === 'string' ? data.fields : JSON.stringify(data.fields || []);
   return await prisma.formTemplate.update({
     where: { id: parseInt(id, 10) },
     data: {
       name: data.name,
       category: data.category,
-      fields: data.fields
+      fields: fieldsData
     }
   });
 };
@@ -116,7 +128,10 @@ const seedTemplates = async () => {
   ];
 
   for (const t of defaults) {
-    await prisma.formTemplate.create({ data: t });
+    const fieldsData = typeof t.fields === 'string' ? t.fields : JSON.stringify(t.fields || []);
+    await prisma.formTemplate.create({ 
+      data: { ...t, fields: fieldsData } 
+    });
   }
 };
 

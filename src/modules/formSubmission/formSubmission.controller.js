@@ -12,7 +12,7 @@ const createSubmission = async (req, res) => {
       message: 'Assessment finalized and synchronized'
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
     });
@@ -25,14 +25,19 @@ const createSubmission = async (req, res) => {
 const getPatientSubmissions = async (req, res) => {
   try {
     const { patientId } = req.query;
-    if (!patientId) throw new Error('Patient ID is required');
+    if (!patientId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Patient ID is required'
+      });
+    }
     const submissions = await submissionService.getSubmissionsByPatientId(patientId);
     res.status(200).json({
       success: true,
       data: submissions
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
     });
@@ -46,13 +51,18 @@ const getSubmission = async (req, res) => {
   try {
     const { id } = req.params;
     const submission = await submissionService.getSubmissionById(id);
-    if (!submission) throw new Error('Submission not found');
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found'
+      });
+    }
     res.status(200).json({
       success: true,
       data: submission
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
     });

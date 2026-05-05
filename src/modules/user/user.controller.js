@@ -8,8 +8,8 @@ const { logActivity } = require('../../utils/activityLogger');
  */
 const getMe = async (req, res) => {
   try {
-    const id = req.user?.id;
-    if (!id) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const id = parseInt(req.user?.id, 10);
+    if (!id || isNaN(id)) return res.status(401).json({ success: false, message: 'Unauthorized' });
     const user = await userService.getUserById(id);
     return res.status(200).json({ success: true, data: user });
   } catch (error) {

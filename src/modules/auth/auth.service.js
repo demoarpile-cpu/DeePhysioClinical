@@ -108,6 +108,12 @@ const loginUser = async (credentials) => {
     { expiresIn: '24h' }
   );
 
+  // Parse JSON string fields from DB before sending to frontend
+  let parsedMenus = user.allowed_menus;
+  if (typeof parsedMenus === 'string') {
+    try { parsedMenus = JSON.parse(parsedMenus); } catch (e) { parsedMenus = null; }
+  }
+
   return {
     token,
     user: {
@@ -115,7 +121,7 @@ const loginUser = async (credentials) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      allowed_menus: user.allowed_menus,
+      allowed_menus: parsedMenus,
       allowed_permissions: getAssignedPermissions(user),
       effective_permissions: getEffectivePermissions(user),
       allowed_actions: getEffectiveAllowedActions(user)

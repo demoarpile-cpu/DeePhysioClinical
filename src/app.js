@@ -125,6 +125,9 @@ app.use('/api/body-charts', verifyToken, requireModuleAccess('Patients'), bodyCh
 const episodeRoutes = require('./modules/episode/episode.routes');
 app.use('/api/episodes', verifyToken, requireModuleAccess('Patients'), episodeRoutes);
 
+const clinicalHistoryRoutes = require('./modules/clinicalHistory/clinicalHistory.routes');
+app.use('/api/clinical-history', verifyToken, requireModuleAccess('Patients'), clinicalHistoryRoutes);
+
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
 app.use('/api/analytics', verifyToken, requireModuleAccess('Analytics'), analyticsRoutes);
 

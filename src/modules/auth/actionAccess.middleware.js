@@ -4,10 +4,23 @@ const { logActivity } = require('../../utils/activityLogger');
 
 const loadUserAccess = async (userId) => {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: parseInt(userId, 10) },
     select: { role: true, allowed_permissions: true, allowed_actions: true }
   });
   if (!user) return null;
+
+  // Parse JSON strings from DB if necessary
+  const fields = ['allowed_permissions', 'allowed_actions'];
+  fields.forEach(field => {
+    if (typeof user[field] === 'string' && user[field].startsWith('[')) {
+      try {
+        user[field] = JSON.parse(user[field]);
+      } catch (e) {
+        user[field] = [];
+      }
+    }
+  });
+
   return {
     user,
     effectivePermissions: getEffectivePermissions(user),

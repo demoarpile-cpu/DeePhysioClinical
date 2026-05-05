@@ -34,7 +34,7 @@ router.post('/', verifyToken, requireActionAccess('notes.manage'), async (req, r
       data: {
         title,
         category,
-        content,
+        content: typeof content === 'object' ? JSON.stringify(content) : content,
         isCustom: isCustom !== undefined ? isCustom : true
       }
     });
@@ -66,7 +66,7 @@ router.put('/:id', verifyToken, requireActionAccess('notes.manage'), async (req,
       data: {
         title,
         category,
-        content,
+        content: typeof content === 'object' ? JSON.stringify(content) : content,
         isCustom: isCustom !== undefined ? isCustom : true
       }
     });

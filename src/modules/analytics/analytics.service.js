@@ -13,18 +13,22 @@ const getOverview = async (user = null) => {
 
   // Fetch all base data in PARALLEL instead of sequentially
   // This reduces total DB time from sum-of-all to max-of-one
-  const [appointments, invoices, patients, { systemFeed: recentLogs }] = await Promise.all([
+  const [appointments, invoices, patients, payments, { systemFeed: recentLogs }] = await Promise.all([
     prisma.appointment.findMany({
       where: { appointment_date: { gte: sixMonthsAgo } },
       select: { appointment_date: true, status: true, id: true }
     }),
     prisma.invoice.findMany({
-      where: { date: { gte: sixMonthsAgo }, status: 'PAID' },
-      select: { date: true, total: true }
+      where: { date: { gte: sixMonthsAgo } },
+      select: { date: true, total: true, status: true }
     }),
     prisma.patient.findMany({
       where: { created_at: { gte: sixMonthsAgo } },
       select: { created_at: true }
+    }),
+    prisma.payment.findMany({
+      where: { date: { gte: sixMonthsAgo } },
+      select: { date: true, amount: true }
     }),
     fetchActivityLogs(user || { role: 'admin' }, { limit: 15 })
   ]);
@@ -49,10 +53,10 @@ const getOverview = async (user = null) => {
     }
   });
 
-  invoices.forEach(inv => {
-    const month = getMonthAbbr(inv.date);
+  payments.forEach(pay => {
+    const month = getMonthAbbr(pay.date);
     if (monthlyDataMap.has(month)) {
-      monthlyDataMap.get(month).revenue += parseFloat(inv.total);
+      monthlyDataMap.get(month).revenue += parseFloat(pay.amount || 0);
     }
   });
 
@@ -92,10 +96,10 @@ const getOverview = async (user = null) => {
     }
   });
 
-  invoices.forEach(inv => {
-    const week = getWeekName(inv.date);
+  payments.forEach(pay => {
+    const week = getWeekName(pay.date);
     if (week) {
-      weeklyDataMap.get(week).revenue += parseFloat(inv.total);
+      weeklyDataMap.get(week).revenue += parseFloat(pay.amount || 0);
     }
   });
 
@@ -116,7 +120,7 @@ const getOverview = async (user = null) => {
   const totalNoShows = appointments.filter(a => a.status === 'no_show').length;
   const totalCompleted = appointments.filter(a => a.status === 'completed').length;
   const totalNewPatients = patients.length;
-  const totalRevenue = invoices.reduce((sum, inv) => sum + parseFloat(inv.total || 0), 0);
+  const totalRevenue = payments.reduce((sum, pay) => sum + parseFloat(pay.amount || 0), 0);
 
   return { monthlyData, weeklyData, systemFeed: recentLogs, summary: { totalAppointments, totalNoShows, totalCompleted, totalNewPatients, totalRevenue } };
 };

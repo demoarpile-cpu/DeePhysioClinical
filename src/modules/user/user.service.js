@@ -10,7 +10,29 @@ const {
   validatePermissionAssignment
 } = require('../../config/actionAccess');
 
+const parseUserJsonFields = (user) => {
+  if (!user) return user;
+  const fields = ['allowed_menus', 'allowed_permissions', 'allowed_actions'];
+  fields.forEach(field => {
+    if (typeof user[field] === 'string') {
+      try {
+        user[field] = JSON.parse(user[field]);
+      } catch (e) {
+        user[field] = [];
+      }
+    }
+  });
+  return user;
+};
+
 const normalizeAllowedMenus = (allowedMenus) => {
+  if (typeof allowedMenus === 'string') {
+    try {
+      allowedMenus = JSON.parse(allowedMenus);
+    } catch (e) {
+      return null;
+    }
+  }
   if (!Array.isArray(allowedMenus)) return null;
   const unique = [...new Set(allowedMenus.filter((m) => MODULES.includes(m)))];
   return unique;
@@ -51,9 +73,9 @@ const buildPermissionBundle = ({ role, allowed_permissions, allowed_actions }) =
 const getAllUsers = async () => {
   const users = await prisma.user.findMany();
 
-  // Exclude password field from all users
   return users.map(user => {
-    const { password, ...userWithoutPassword } = user;
+    const parsedUser = parseUserJsonFields(user);
+    const { password, ...userWithoutPassword } = parsedUser;
     userWithoutPassword.allowed_permissions = getAssignedPermissions(userWithoutPassword);
     userWithoutPassword.effective_permissions = getEffectivePermissions(userWithoutPassword);
     userWithoutPassword.allowed_actions = getEffectiveAllowedActions(userWithoutPassword);
@@ -90,13 +112,14 @@ const createUser = async (userData) => {
       email,
       password: hashedPassword,
       role,
-      allowed_menus: safeMenus,
-      allowed_permissions: permissionBundle.assignedPermissions,
-      allowed_actions: permissionBundle.legacyActions
+      allowed_menus: safeMenus ? JSON.stringify(safeMenus) : null,
+      allowed_permissions: permissionBundle.assignedPermissions ? JSON.stringify(permissionBundle.assignedPermissions) : null,
+      allowed_actions: permissionBundle.legacyActions ? JSON.stringify(permissionBundle.legacyActions) : null
     }
   });
 
-  const { password: _, ...userWithoutPassword } = user;
+  const parsedUser = parseUserJsonFields(user);
+  const { password: _, ...userWithoutPassword } = parsedUser;
   userWithoutPassword.allowed_permissions = getAssignedPermissions(userWithoutPassword);
   userWithoutPassword.effective_permissions = getEffectivePermissions(userWithoutPassword);
   userWithoutPassword.allowed_actions = getEffectiveAllowedActions(userWithoutPassword);
@@ -114,7 +137,8 @@ const getUserById = async (id) => {
     throw error;
   }
 
-  const { password, ...userWithoutPassword } = user;
+  const parsedUser = parseUserJsonFields(user);
+  const { password, ...userWithoutPassword } = parsedUser;
   userWithoutPassword.allowed_permissions = getAssignedPermissions(userWithoutPassword);
   userWithoutPassword.effective_permissions = getEffectivePermissions(userWithoutPassword);
   userWithoutPassword.allowed_actions = getEffectiveAllowedActions(userWithoutPassword);
@@ -139,7 +163,7 @@ const updateUser = async (id, data) => {
   }
 
   if (allowed_menus !== undefined) {
-    updateData.allowed_menus = normalizeAllowedMenus(allowed_menus);
+    updateData.allowed_menus = JSON.stringify(normalizeAllowedMenus(allowed_menus));
   }
   if (allowed_menus !== undefined || allowed_actions !== undefined || allowed_permissions !== undefined || data.role !== undefined) {
     const existing = await prisma.user.findUnique({
@@ -159,16 +183,23 @@ const updateUser = async (id, data) => {
       allowed_actions: sourceLegacyActions
     });
 
-    updateData.allowed_permissions = permissionBundle.assignedPermissions;
-    updateData.allowed_actions = permissionBundle.legacyActions;
+    updateData.allowed_permissions = JSON.stringify(permissionBundle.assignedPermissions);
+    updateData.allowed_actions = JSON.stringify(permissionBundle.legacyActions);
   }
+
+  // Remove fields not in the Prisma User model to avoid errors
+  const ALLOWED_USER_FIELDS = ['name', 'email', 'password', 'role', 'allowed_menus', 'allowed_permissions', 'allowed_actions'];
+  Object.keys(updateData).forEach(key => {
+    if (!ALLOWED_USER_FIELDS.includes(key)) delete updateData[key];
+  });
 
   const user = await prisma.user.update({
     where: { id },
     data: updateData
   });
 
-  const { password: _, ...userWithoutPassword } = user;
+  const parsedUser = parseUserJsonFields(user);
+  const { password: _, ...userWithoutPassword } = parsedUser;
   userWithoutPassword.allowed_permissions = getAssignedPermissions(userWithoutPassword);
   userWithoutPassword.effective_permissions = getEffectivePermissions(userWithoutPassword);
   userWithoutPassword.allowed_actions = getEffectiveAllowedActions(userWithoutPassword);

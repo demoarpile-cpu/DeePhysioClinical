@@ -133,23 +133,20 @@ const sendMessage = async ({ threadId, patientId, channel, subject, body, create
 const updateMessageFlags = async (messageId, { isStarred, isDeleted }) => {
   await ensureCommunicationSchema();
   
-  if (isStarred !== undefined) {
-    await prisma.$executeRaw`
-      UPDATE communication_messages 
-      SET is_starred = ${isStarred ? 1 : 0} 
-      WHERE id = ${BigInt(messageId)}
-    `;
-  }
-  
-  if (isDeleted !== undefined) {
-    await prisma.$executeRaw`
-      UPDATE communication_messages 
-      SET is_deleted = ${isDeleted ? 1 : 0} 
-      WHERE id = ${BigInt(messageId)}
-    `;
-  }
+  const updates = [];
+  if (isStarred !== undefined) updates.push(`is_starred = ${isStarred ? 1 : 0}`);
+  if (isDeleted !== undefined) updates.push(`is_deleted = ${isDeleted ? 1 : 0}`);
 
-  const rows = await prisma.$queryRaw`SELECT * FROM communication_messages WHERE id = ${BigInt(messageId)}`;
+  if (updates.length === 0) return null;
+
+  // Using a very direct raw SQL query to bypass any Prisma model issues
+  await prisma.$executeRawUnsafe(`
+    UPDATE communication_messages 
+    SET ${updates.join(', ')}
+    WHERE id = ${messageId}
+  `);
+
+  const rows = await prisma.$queryRawUnsafe(`SELECT * FROM communication_messages WHERE id = ${messageId}`);
   return rows[0];
 };
 

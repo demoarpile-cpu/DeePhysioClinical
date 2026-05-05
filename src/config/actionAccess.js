@@ -113,11 +113,25 @@ const LEGACY_TO_PERMISSION = {
 };
 
 const normalizePermissions = (permissions) => {
+  if (typeof permissions === 'string') {
+    try {
+      permissions = JSON.parse(permissions);
+    } catch (e) {
+      return null;
+    }
+  }
   if (!Array.isArray(permissions)) return null;
   return [...new Set(permissions.filter((p) => PERMISSIONS.includes(p)))];
 };
 
 const normalizeAllowedActions = (allowedActions) => {
+  if (typeof allowedActions === 'string') {
+    try {
+      allowedActions = JSON.parse(allowedActions);
+    } catch (e) {
+      return null;
+    }
+  }
   if (!Array.isArray(allowedActions)) return null;
   return [...new Set(allowedActions.filter((a) => LEGACY_ACTIONS.includes(a)))];
 };

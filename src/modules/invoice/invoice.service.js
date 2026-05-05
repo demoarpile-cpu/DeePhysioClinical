@@ -14,7 +14,7 @@ const getAllInvoices = async (filters) => {
       items: true,
       payments: true
     },
-    orderBy: { date: 'desc' }
+    orderBy: { created_at: 'desc' }
   });
 };
 
@@ -57,12 +57,24 @@ const getInvoiceDownloadPayload = async (id) => {
 const createInvoice = async (data) => {
   const { patientId, date, items, notes } = data;
 
+  // Fetch tax rate from settings
+  let taxRate = 20; 
+  try {
+    const settings = await prisma.globalSettings.findUnique({ where: { key: 'clinicProfile' } });
+    if (settings && settings.value) {
+      const profile = JSON.parse(settings.value);
+      if (profile.taxRate !== undefined) taxRate = Number(profile.taxRate);
+    }
+  } catch (e) {
+    console.error('Failed to fetch tax settings');
+  }
+
   // Calculate totals
   let subtotal = 0;
   items.forEach(item => {
     subtotal += item.rate * item.qty;
   });
-  const tax = subtotal * 0.2; // 20% VAT
+  const tax = subtotal * (taxRate / 100);
   const total = subtotal + tax;
 
   return await prisma.invoice.create({

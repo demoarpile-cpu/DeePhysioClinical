@@ -57,9 +57,12 @@ const createAppointment = async (data) => {
 
     if (existingClash) {
       const isRoomClash = existingClash.room === room;
+      const existStart = new Date(existingClash.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const existEnd = new Date(existingClash.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      
       const message = isRoomClash 
-        ? `The room "${room}" is already occupied during this time slot.`
-        : `The practitioner ${existingClash.therapist.name} is already booked or has an overlapping appointment during this time.`;
+        ? `The room "${room}" is already occupied from ${existStart} to ${existEnd}. Please select another time or room.`
+        : `The practitioner ${existingClash.therapist.name} is already booked from ${existStart} to ${existEnd}.`;
       
       const error = new Error(message);
       error.statusCode = 409;

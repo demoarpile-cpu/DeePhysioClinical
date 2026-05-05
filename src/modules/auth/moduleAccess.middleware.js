@@ -46,7 +46,7 @@ const requireModuleAccess = (moduleName) => {
       }
 
       const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
+        where: { id: parseInt(req.user.id, 10) },
         select: { role: true, allowed_menus: true, allowed_permissions: true, allowed_actions: true }
       });
 
@@ -56,6 +56,17 @@ const requireModuleAccess = (moduleName) => {
           message: 'Unauthorized'
         });
       }
+
+      // Parse JSON strings from DB if necessary
+      ['allowed_menus', 'allowed_permissions', 'allowed_actions'].forEach(field => {
+        if (typeof user[field] === 'string' && user[field].startsWith('[')) {
+          try {
+            user[field] = JSON.parse(user[field]);
+          } catch (e) {
+            user[field] = [];
+          }
+        }
+      });
 
       const rawMenus = Array.isArray(user.allowed_menus) ? user.allowed_menus : (ROLE_DEFAULTS[user.role] || []);
       const normalizedMenus = rawMenus.map(normalizeModuleName);

@@ -116,7 +116,9 @@ const createClinicalNote = async (data) => {
     return await prisma.clinicalNote.create({
       data: {
         ...baseData,
-        dynamic_content: normalizedDynamicContent || null
+        dynamic_content: (normalizedDynamicContent && typeof normalizedDynamicContent === 'object') 
+          ? JSON.stringify(normalizedDynamicContent) 
+          : (normalizedDynamicContent || null)
       },
       include: includeRelations
     });
@@ -176,7 +178,11 @@ const updateClinicalNote = async (id, data) => {
   if (objective !== undefined) updateData.objective = objective || null;
   if (assessment !== undefined) updateData.assessment = assessment || null;
   if (plan !== undefined) updateData.plan = plan || null;
-  if (normalizedDynamicContent !== undefined) updateData.dynamic_content = normalizedDynamicContent || null;
+  if (normalizedDynamicContent !== undefined) {
+    updateData.dynamic_content = (normalizedDynamicContent && typeof normalizedDynamicContent === 'object')
+      ? JSON.stringify(normalizedDynamicContent)
+      : (normalizedDynamicContent || null);
+  }
 
   try {
     return await prisma.clinicalNote.update({
